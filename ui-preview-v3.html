@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GYM App UI Preview V3</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,PingFang SC,Microsoft YaHei,sans-serif;background:#1a1a2e;color:#fff;padding:20px}
+h1{text-align:center;margin:0 0 8px;font-size:24px}
+.sub{text-align:center;color:#999;font-size:12px;margin-bottom:20px}
+.grid{display:flex;flex-wrap:wrap;gap:18px;justify-content:center}
+.phone{width:375px;background:#f5f5f5;border-radius:28px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;height:700px}
+.phone-inner{flex:1;overflow-y:auto;overflow-x:hidden}
+.topbar{background:#1a1a2e;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;flex-shrink:0}
+.topbar .back{font-size:18px;cursor:pointer}
+.topbar .title{flex:1}
+.topbar .icon{font-size:16px;opacity:.7;cursor:pointer;margin-left:6px}
+.stats-bar{background:#1a1a2e;display:flex;justify-content:space-around;padding:14px 16px}
+
+.stat{text-align:center}
+.stat .val{font-size:22px;font-weight:700;color:#fff}
+.stat .unit{font-size:11px;color:#999}
+.stat .lbl{font-size:10px;color:#999;margin-top:2px}
+
+.gsearch{margin:8px 14px;background:#fff;border-radius:14px;display:flex;align-items:center;padding:8px 12px;gap:8px}
+.gsearch input{border:none;flex:1;font-size:13px;outline:none;color:#333}
+.gsearch .si{color:#999;font-size:14px}
+
+/* Bottom nav - square-ish pill with circle tabs */
+.bottom-nav{flex-shrink:0;display:flex;justify-content:center;padding:8px 18px 14px}
+.nav-pill{display:flex;align-items:center;background:#1a1a2e;border-radius:16px;padding:8px 14px;width:100%;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.nav-tabs{flex:1;display:flex;gap:6px}
+.nav-tab{flex:1;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;font-weight:500;color:#999;transition:.2s}
+.nav-tab.active{background:#2196f3;color:#fff;font-weight:700}
+.nav-setting{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;margin-left:4px}
+
+.tabs{display:flex;gap:6px;padding:6px 14px;overflow-x:auto}
+.tab{padding:6px 14px;border-radius:20px;font-size:12px;border:1px solid #ddd;color:#666;white-space:nowrap;cursor:pointer}
+.tab.active{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+
+.cards2{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 14px}
+.card2{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.card2 .gif{aspect-ratio:1;background:#e8e8e8;display:flex;align-items:center;justify-content:center;font-size:36px}
+.card2 .info{padding:8px 10px}
+.card2 .name{font-size:12px;font-weight:700;color:#1a1a2e;line-height:1.3}
+.card2 .tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;margin-top:4px}
+
+.section-label{padding:6px 14px;font-size:11px;color:#999}
+.plan-card{background:#fff;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,.1);cursor:pointer;margin:4px 14px}
+.plan-card .picon{width:42px;height:42px;border-radius:50%;background:#e3f2fd;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.plan-card .pmid{flex:1}
+.plan-card .pmid .pn{font-size:15px;font-weight:700;color:#1a1a2e}
+.plan-card .pmid .pd{font-size:11px;color:#999;margin-top:2px}
+.plan-card .pview{color:#2196f3;font-size:13px;font-weight:500;cursor:pointer;padding:4px 8px}
+.plan-card .pdel{color:#ff7043;font-size:18px;cursor:pointer}
+.plan-card.add .picon{background:#bbdefb;color:#2196f3}
+.plan-card.add .pn{color:#2196f3;font-weight:500}
+
+.hstats{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 14px}
+.hstat{background:#fff;border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.hstat .hi{font-size:22px}
+.hstat .hv{font-size:26px;font-weight:700;color:#1a1a2e;margin-top:4px}
+.hstat .hl{font-size:11px;color:#999}
+
+.cal{background:#fff;border-radius:14px;margin:8px 14px;padding:14px}
+.cal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.cal-h .m{font-size:16px;font-weight:700;color:#1a1a2e}
+.cal-h .arr{cursor:pointer;font-size:18px;color:#1a1a2e}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);text-align:center}
+.cal-grid .dh{font-size:11px;color:#999;padding:4px 0}
+.cal-grid .dd{padding:4px 0;font-size:13px;cursor:pointer;color:#1a1a2e}
+.cal-grid .dd .num{display:inline-flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:50%}
+.cal-grid .dd.today .num{background:#e3f2fd;color:#2196f3;font-weight:700}
+.cal-grid .dd.sel .num{background:#2196f3;color:#fff;font-weight:700}
+.cal-grid .dd .dot{width:4px;height:4px;background:#4caf50;border-radius:50%;margin:1px auto 0}
+
+.ex-card{background:#fff;border-radius:12px;margin:6px 12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.ex-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ex-top .ex-gif{width:52px;height:52px;background:#e8e8e8;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0}
+.ex-top .ex-info{flex:1}
+.ex-top .ex-info .en{font-size:15px;font-weight:700;color:#1a1a2e}
+.ex-top .ex-info .es{font-size:11px;color:#999}
+.ex-top .ex-target{text-align:right;flex-shrink:0}
+.ex-top .ex-target .etl{font-size:10px;color:#999}
+.ex-top .ex-target .etv{font-size:13px;font-weight:700;color:#2196f3}
+.ex-compare{display:flex;gap:20px;margin-top:8px;font-size:11px}
+.ex-compare .ec{color:#999}.ex-compare .ec b{color:#1a1a2e}
+.ex-muscle{font-size:10px;color:#999;margin-top:6px}
+.sets-h{display:flex;align-items:center;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid #eee;cursor:pointer}
+.sets-h .shc{font-weight:700;font-size:13px;color:#1a1a2e}
+.sets-h .shp{font-size:11px;color:#4caf50}
+.set-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
+.set-row .chk{width:22px;height:22px;border-radius:50%;border:2px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;flex-shrink:0}
+.set-row .chk.done{background:#4caf50;border-color:#4caf50;color:#fff}
+.set-row .st{display:flex;align-items:center;gap:2px;color:#1a1a2e;font-weight:700}
+.set-row .st span{cursor:pointer;color:#999;font-size:15px;padding:0 4px}
+.add-set{text-align:center;color:#999;font-size:12px;padding:6px;cursor:pointer}
+
+/* Bottom fixed bars */
+.btm-fixed{flex-shrink:0;background:#fff;border-top:1px solid #eee;padding:10px 14px;display:flex;gap:10px}
+.btm-fixed .bo{flex:1;padding:10px;border:1px solid #ccc;border-radius:10px;text-align:center;font-size:14px;font-weight:500;color:#1a1a2e;cursor:pointer}
+.btm-fixed .bf{flex:1;padding:10px;background:#4caf50;color:#fff;border-radius:10px;text-align:center;font-size:14px;font-weight:700;cursor:pointer}
+.btm-fixed .bs{flex:1;padding:12px;background:#4caf50;color:#fff;border-radius:12px;text-align:center;font-size:15px;font-weight:700;cursor:pointer}
+
+.detail-gif{aspect-ratio:1;background:#000;display:flex;align-items:center;justify-content:center;font-size:60px;position:relative}
+.detail-overlay{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);padding:14px}
+.detail-tags{display:flex;gap:6px;padding:12px 14px;flex-wrap:wrap;background:#fff}
+.dtag{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:500}
+
+.step-i{display:flex;gap:10px;padding:8px 14px;align-items:flex-start;background:#fff}
+.step-n{width:26px;height:26px;border-radius:50%;background:#1a1a2e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px}
+.step-t{font-size:13px;color:#333;line-height:1.5;flex:1}
+.step-c{width:22px;height:22px;border-radius:50%;border:2px solid #ddd;flex-shrink:0;cursor:pointer}
+
+.edit-i{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;margin:4px 14px;border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.edit-num{width:30px;height:30px;border-radius:50%;background:#1a1a2e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.edit-gif{width:38px;height:38px;background:#e8e8e8;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.edit-mid{flex:1}
+.edit-mid .en{font-size:14px;font-weight:700;color:#1a1a2e}
+.edit-mid .es{font-size:12px;color:#666;margin-top:2px}
+.edit-mid .es span{cursor:pointer;color:#2196f3;font-weight:700;padding:0 3px}
+.edit-del{color:#ff7043;cursor:pointer;font-size:20px;flex-shrink:0}
+
+.set-card{background:#fff;border-radius:14px;margin:8px 14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.set-card .stitle{font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:8px}
+.set-srow{display:flex;align-items:center;padding:8px;border-radius:8px;cursor:pointer}
+.set-srow .sl{flex:1;font-size:14px;color:#1a1a2e}
+.set-srow .chk2{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px}
+.set-srow.sel .sl{color:#2196f3;font-weight:700}
+.set-srow .chk2.on{background:#2196f3;color:#fff}
+.set-srow .soon{font-size:11px;color:#999}
+
+.comp-icon{text-align:center;padding:20px}
+.comp-icon .ci{font-size:56px}
+.comp-icon .ct{font-size:20px;font-weight:700;color:#1a1a2e;margin-top:4px}
+.comp-icon .cp{font-size:14px;color:#2196f3;margin-top:2px}
+.comp-stats{display:flex;justify-content:center;gap:28px;padding:10px;background:#fff}
+
+.tcard{background:#fff;border-radius:12px;margin:6px 14px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.tcard .tn{font-weight:700;font-size:14px;color:#1a1a2e}
+.tcard .tbadges{display:flex;gap:6px;margin-top:6px}
+.tbadge{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.tb-up{background:#e8f5e9;color:#4caf50}
+.tb-down{background:#fff3e0;color:#ff7043}
+.tb-same{background:#f5f5f5;color:#999}
+.tchart{height:60px;background:#fafafa;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:11px;margin-top:8px}
+.tdata{display:flex;gap:14px;margin-top:6px;font-size:11px}
+.tdata .tdl{color:#999}
+.tdata .tdv{font-weight:700;color:#1a1a2e;font-size:13px}
+
+.sec-title{padding:10px 14px 4px;font-size:14px;font-weight:700;color:#1a1a2e}
+
+.h-sess{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;margin:4px 14px;border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.05);cursor:pointer}
+.h-sess .hbar{width:3px;height:38px;background:#2196f3;border-radius:2px;flex-shrink:0}
+.h-sess .hmid{flex:1}
+.h-sess .hmid .hd{font-size:10px;color:#999}
+.h-sess .hmid .hn{font-size:14px;font-weight:700;color:#1a1a2e}
+.h-sess .hmid .ht{font-size:10px;color:#999}
+.h-sess .harr{color:#999;font-size:16px}
+
+h3{font-size:11px;color:#aaa;text-align:center;margin:4px 0 2px;text-transform:uppercase;letter-spacing:1px}
+.note{font-size:10px;color:#4caf50;text-align:center;margin-bottom:4px}
+</style>
+</head>
+<body>
+<h1>GYM 健身 App — UI Preview V3</h1>
+<div class="sub">圆角方形底栏 · 圆形纯文字 Tab · 固定底栏(训练取消/完成、编辑保存、完成后返回首页)</div>
+<div class="grid">
+
+<!-- ===== 1. MY PLAN ===== -->
+<div class="phone">
+  <h3>1. 我的计划（主页）</h3>
+  <div class="note">底栏: 圆形纯文字 Tab | 点击 → 编辑计划(#2) 或 训练(#5)</div>
+  <div class="topbar"><span class="title">我的计划</span><span class="icon">⋮</span></div>
+  <div class="phone-inner">
+    <div class="gsearch"><span class="si">🔍</span><input placeholder="搜索动作名称（支持模糊匹配）"></div>
+    <div class="section-label">我创建的</div>
+    <div class="plan-card"><div class="picon">🏋️</div><div class="pmid"><div class="pn">三分化训练</div><div class="pd">07/29/2026</div></div><span class="pview">查看</span><span class="pdel">🗑</span></div>
+    <div class="plan-card"><div class="picon">🏋️</div><div class="pmid"><div class="pn">四分化训练</div><div class="pd">07/25/2026</div></div><span class="pview">查看</span><span class="pdel">🗑</span></div>
+    <div class="plan-card add"><div class="picon">＋</div><div class="pmid"><div class="pn">添加新计划</div></div></div>
+  </div>
+  <div class="bottom-nav"><div class="nav-pill">
+    <div class="nav-tabs">
+      <div class="nav-tab active">计划</div>
+      <div class="nav-tab">历史</div>
+      <div class="nav-tab">动作</div>
+    </div>
+    <div class="nav-setting">⚙</div>
+  </div></div>
+</div>
+
+<!-- ===== 2. EDIT PLAN (save at bottom) ===== -->
+<div class="phone">
+  <h3>2. 编辑计划（保存按钮→底栏固定）</h3>
+  <div class="note">每动作 GIF | 搜索添加 | ✓ 保存固定在底部</div>
+  <div class="topbar"><span class="back">←</span><span class="title">编辑计划</span><span class="icon">✏️</span></div>
+  <div class="phone-inner">
+    <div style="padding:12px 16px;font-size:18px;font-weight:700;color:#1a1a2e;">三分化-推日</div>
+    <div class="edit-i"><div class="edit-num">1</div><div class="edit-gif">🏋️</div><div class="edit-mid"><div class="en">杠铃卧推</div><div class="es"><span>−</span> 3 <span>+</span> 组 × <span>−</span> 10 <span>+</span> 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="edit-i"><div class="edit-num">2</div><div class="edit-gif">🏋️</div><div class="edit-mid"><div class="en">上斜哑铃卧推</div><div class="es"><span>−</span> 3 <span>+</span> 组 × <span>−</span> 12 <span>+</span> 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="edit-i"><div class="edit-num">3</div><div class="edit-gif">🏋️</div><div class="edit-mid"><div class="en">绳索飞鸟</div><div class="es"><span>−</span> 3 <span>+</span> 组 × <span>−</span> 12 <span>+</span> 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="edit-i"><div class="edit-num">4</div><div class="edit-gif">🏋️</div><div class="edit-mid"><div class="en">双杠臂屈伸</div><div class="es"><span>−</span> 3 <span>+</span> 组 × <span>−</span> 10 <span>+</span> 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="edit-i"><div class="edit-num">5</div><div class="edit-gif">🏋️</div><div class="edit-mid"><div class="en">器械胸推</div><div class="es"><span>−</span> 3 <span>+</span> 组 × <span>−</span> 10 <span>+</span> 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="gsearch"><span class="si">🔍</span><input placeholder="搜索并添加动作..."></div>
+    <div style="height:16px"></div>
+  </div>
+  <div class="btm-fixed"><div class="bs">✓ 保存</div></div>
+</div>
+
+<!-- ===== 3. EXERCISE ===== -->
+<div class="phone">
+  <h3>3. 动作库</h3>
+  <div class="note">全局搜索 + 分类 + 2列GIF网格</div>
+  <div class="topbar"><span class="title">动作库</span><span class="icon">🔍</span><span class="icon">⋮</span></div>
+  <div class="phone-inner">
+    <div class="gsearch"><span class="si">🔍</span><input placeholder="搜索动作名称（支持模糊匹配）"></div>
+    <div class="tabs"><div class="tab active">全部</div><div class="tab">胸部</div><div class="tab">背部</div><div class="tab">肩部</div><div class="tab">大腿</div><div class="tab">上臂</div><div class="tab">腰部</div></div>
+    <div class="cards2">
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">杠铃卧推</div><div class="tag" style="background:#ffe0b2;color:#e65100">胸部</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">上斜哑铃卧推</div><div class="tag" style="background:#ffe0b2;color:#e65100">胸部</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">绳索交叉</div><div class="tag" style="background:#ffe0b2;color:#e65100">胸部</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">双杠臂屈伸</div><div class="tag" style="background:#ffe0b2;color:#e65100">胸部</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">器械胸推</div><div class="tag" style="background:#ffcc80;color:#bf360c">胸部</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">俯卧撑</div><div class="tag" style="background:#ffe0b2;color:#e65100">胸部</div></div></div>
+    </div>
+  </div>
+  <div class="bottom-nav"><div class="nav-pill">
+    <div class="nav-tabs"><div class="nav-tab">计划</div><div class="nav-tab">历史</div><div class="nav-tab active">动作</div></div>
+    <div class="nav-setting">⚙</div>
+  </div></div>
+</div>
+
+<!-- ===== 4. DETAIL ===== -->
+<div class="phone">
+  <h3>4. 动作详情</h3>
+  <div class="note">大GIF + 标签 + 分步要点</div>
+  <div class="topbar"><span class="back">←</span><span class="title">动作详情</span><span class="icon">⋮</span></div>
+  <div class="phone-inner">
+    <div class="detail-gif">🏋️‍♂️<div class="detail-overlay"><div style="font-size:18px;font-weight:700;">杠铃卧推</div><div style="font-size:12px;opacity:.8;">胸部 · 胸大肌 ▶</div></div></div>
+    <div class="detail-tags"><div class="dtag" style="background:#e3f2fd;color:#1565c0;">胸部</div><div class="dtag" style="background:#fff3e0;color:#e65100;">胸大肌</div><div class="dtag" style="background:#e8f5e9;color:#2e7d32;">杠铃</div></div>
+    <div style="display:flex;justify-content:space-between;padding:10px 14px;background:#fff;font-weight:700;font-size:14px;color:#1a1a2e;">动作要点 <span style="color:#2196f3;font-size:12px;font-weight:500;">🎬 视频教程 ▸</span></div>
+    <div class="step-i"><div class="step-n">1</div><div class="step-t">平躺在长凳上，双脚平放地面，握住杠铃，双手略宽于肩。</div><div class="step-c"></div></div>
+    <div class="step-i"><div class="step-n">2</div><div class="step-t">将杠铃从架子上取下，手臂伸直在胸部上方。</div><div class="step-c"></div></div>
+    <div class="step-i"><div class="step-n">3</div><div class="step-t">缓慢将杠铃下放至胸部中间，肘部呈45度。</div><div class="step-c"></div></div>
+    <div class="step-i"><div class="step-n">4</div><div class="step-t">用胸部发力推回起始位置，顶部稍作停顿。</div><div class="step-c"></div></div>
+    <div class="step-i"><div class="step-n">5</div><div class="step-t">重复所需次数，全程保持核心收紧。</div><div class="step-c"></div></div>
+  </div>
+</div>
+
+<!-- ===== 5. WORKOUT ===== -->
+<div class="phone">
+  <h3>5. 训练执行（Cancel/Finish 固定在底部）</h3>
+  <div class="note">GIF + Previous/Best + 肌群 + 折叠组数 + ✓完成</div>
+  <div class="topbar"><span class="back">←</span><span class="title">训练</span><span class="icon">📤</span></div>
+  <div class="stats-bar"><div class="stat"><div class="val">0</div><div class="unit">Lbs</div><div class="lbl">总重量</div></div><div class="stat"><div class="val">12:30</div><div class="lbl">训练时长</div></div></div>
+  <div class="phone-inner">
+    <div class="sec-title">训练计划</div>
+    <div class="ex-card">
+      <div class="ex-top"><div class="ex-gif">🏋️</div><div class="ex-info"><div class="en">杠铃卧推</div><div class="es">胸部</div></div><div class="ex-target"><div class="etl">目标</div><div class="etv">3组×10次</div></div></div>
+      <div class="ex-compare"><div class="ec">上次: <b>40 lb × 12</b></div><div class="ec">最佳: <b>45 lb × 12</b></div></div>
+      <div class="ex-muscle">💪 训练肌群: 胸大肌、前三角肌</div>
+      <div class="sets-h"><span class="shc">3 组</span><span class="shp">2/3</span><span style="flex:1"></span>▼</div>
+      <div class="set-row"><div class="chk done">✓</div><div class="st"><span>−</span>12次<span>+</span></div><div class="st"><span>−</span>40lb<span>+</span></div></div>
+      <div class="set-row"><div class="chk done">✓</div><div class="st"><span>−</span>10次<span>+</span></div><div class="st"><span>−</span>40lb<span>+</span></div></div>
+      <div class="set-row"><div class="chk"> </div><div class="st"><span>−</span>10次<span>+</span></div><div class="st"><span>−</span>45lb<span>+</span></div></div>
+      <div class="add-set">+ 添加一组</div>
+    </div>
+    <div class="ex-card">
+      <div class="ex-top"><div class="ex-gif">🏋️</div><div class="ex-info"><div class="en">上斜哑铃卧推</div><div class="es">胸部</div></div><div class="ex-target"><div class="etl">目标</div><div class="etv">3组×12次</div></div></div>
+      <div class="ex-compare"><div class="ec">上次: <b>20 lb × 12</b></div><div class="ec">最佳: <b>25 lb × 12</b></div></div>
+      <div class="ex-muscle">💪 训练肌群: 胸大肌、前三角肌</div>
+      <div class="sets-h"><span class="shc">3 组</span><span class="shp">0/3</span><span style="flex:1"></span>▼</div>
+      <div class="set-row"><div class="chk"> </div><div class="st"><span>−</span>12次<span>+</span></div><div class="st"><span>−</span>20lb<span>+</span></div></div>
+      <div class="add-set">+ 添加一组</div>
+    </div>
+  </div>
+  <div class="btm-fixed"><div class="bo">取消</div><div class="bf">✓ 完成训练</div></div>
+</div>
+
+<!-- ===== 6. COMPLETE ===== -->
+<div class="phone">
+  <h3>6. 训练完成（返回首页→底栏固定）</h3>
+  <div class="note">✅ + 统计 + ↑↓→ + 折线图 + 返回首页固定在底部</div>
+  <div class="topbar"><span class="back">←</span><span class="title">训练完成</span></div>
+  <div class="phone-inner">
+    <div class="comp-icon"><div class="ci">✅</div><div class="ct">训练完成！</div><div class="cp">三分化-推日</div></div>
+    <div class="comp-stats"><div class="stat"><div class="val" style="color:#2196f3;font-size:22px;">45分</div><div class="lbl">时长</div></div><div class="stat"><div class="val" style="color:#2196f3;font-size:22px;">6</div><div class="lbl">动作数</div></div><div class="stat"><div class="val" style="color:#2196f3;font-size:22px;">18</div><div class="lbl">总组数</div></div></div>
+    <div class="sec-title">动作详情</div>
+    <div class="tcard"><div class="tn">1. 杠铃卧推</div><div class="tbadges"><span class="tbadge tb-up">↑ 重量</span><span class="tbadge tb-same">→ 次数</span><span class="tbadge tb-up">↑ 总容量</span></div><div class="tchart">📈 Vico: 40→42→45 kg</div><div class="tdata"><div class="tdv" style="color:#2196f3;">45kg</div><div class="tdl">最大重量</div><div class="tdv" style="color:#4caf50;">12</div><div class="tdl">最大次数</div><div class="tdv" style="color:#ff7043;">540kg</div><div class="tdl">总容量</div></div></div>
+    <div class="tcard"><div class="tn">2. 上斜哑铃卧推</div><div class="tbadges"><span class="tbadge tb-up">↑ 重量</span><span class="tbadge tb-up">↑ 次数</span><span class="tbadge tb-up">↑ 总容量</span></div><div class="tchart">📈 Vico: 20→22→25 kg</div><div class="tdata"><div class="tdv" style="color:#2196f3;">25kg</div><div class="tdl">最大重量</div><div class="tdv" style="color:#4caf50;">12</div><div class="tdl">最大次数</div><div class="tdv" style="color:#ff7043;">300kg</div><div class="tdl">总容量</div></div></div><div style="height:16px"></div>
+  </div>
+  <div class="btm-fixed"><div class="bs">返回首页</div></div>
+</div>
+
+<!-- ===== 7. HISTORY ===== -->
+<div class="phone">
+  <h3>7. 历史记录</h3>
+  <div class="note">无返回按钮(主Tab) | 统计卡 + 日历 + 训练列表</div>
+  <div class="topbar"><span class="title">历史记录</span><span class="icon">⋮</span></div>
+  <div class="phone-inner">
+    <div class="hstats"><div class="hstat"><div class="hi">🏋️</div><div class="hv">12</div><div class="hl">总训练次数</div></div><div class="hstat"><div class="hi">📅</div><div class="hv">5</div><div class="hl">本月</div></div></div>
+    <div class="cal"><div class="cal-h"><span class="arr">←</span><span class="m">七月 2026</span><span class="arr">→</span></div>
+      <div class="cal-grid"><div class="dh">一</div><div class="dh">二</div><div class="dh">三</div><div class="dh">四</div><div class="dh">五</div><div class="dh">六</div><div class="dh">日</div>
+        <div class="dd"></div><div class="dd"></div><div class="dd"><span class="num">1</span></div><div class="dd"><span class="num">2</span></div><div class="dd"><span class="num">3</span></div><div class="dd"><span class="num">4</span></div><div class="dd"><span class="num">5</span></div>
+        <div class="dd"><span class="num">6</span></div><div class="dd"><span class="num">7</span></div><div class="dd"><span class="num">8</span></div><div class="dd"><span class="num">9</span></div><div class="dd"><span class="num">10</span></div><div class="dd"><span class="num">11</span></div><div class="dd"><span class="num">12</span></div>
+        <div class="dd"><span class="num">13</span><div class="dot"></div></div><div class="dd"><span class="num">14</span></div><div class="dd"><span class="num">15</span></div><div class="dd"><span class="num">16</span></div><div class="dd"><span class="num">17</span><div class="dot"></div></div><div class="dd"><span class="num">18</span></div><div class="dd"><span class="num">19</span></div>
+        <div class="dd"><span class="num">20</span></div><div class="dd"><span class="num">21</span></div><div class="dd"><span class="num">22</span></div><div class="dd"><span class="num">23</span><div class="dot"></div></div><div class="dd"><span class="num">24</span></div><div class="dd sel"><span class="num">29</span><div class="dot"></div></div></div></div>
+    <div style="font-weight:700;font-size:14px;padding:6px 14px;color:#1a1a2e;">7月 29, 2026</div>
+    <div class="h-sess"><div class="hbar"></div><div class="hmid"><div class="hd">07/29/2026</div><div class="hn">三分化-推日</div><div class="ht">⏱ 45分</div></div><div class="harr">▸</div></div>
+    <div class="h-sess"><div class="hbar"></div><div class="hmid"><div class="hd">07/27/2026</div><div class="hn">三分化-拉日</div><div class="ht">⏱ 52分</div></div><div class="harr">▸</div></div>
+  </div>
+  <div class="bottom-nav"><div class="nav-pill"><div class="nav-tabs"><div class="nav-tab">计划</div><div class="nav-tab active">历史</div><div class="nav-tab">动作</div></div><div class="nav-setting">⚙</div></div></div>
+</div>
+
+<!-- ===== 8. SETTINGS ===== -->
+<div class="phone">
+  <h3>8. 设置（◎ →）</h3>
+  <div class="topbar"><span class="back">←</span><span class="title">设置</span></div>
+  <div class="phone-inner">
+    <div class="set-card"><div class="stitle">语言</div><div class="set-srow sel"><span class="sl">中文</span><div class="chk2 on">✓</div></div><div class="set-srow"><span class="sl">English</span><div class="chk2"></div></div></div>
+    <div class="set-card"><div class="stitle">重量单位</div><div class="set-srow sel"><span class="sl">公斤 (kg)</span><div class="chk2 on">✓</div></div><div class="set-srow"><span class="sl">磅 (lb)</span><div class="chk2"></div></div></div>
+    <div class="set-card"><div class="stitle">身体数据</div><div class="set-srow"><span class="sl">性别</span><span class="soon">即将推出</span></div><div class="set-srow"><span class="sl">身高</span><span class="soon">即将推出</span></div><div class="set-srow"><span class="sl">体重</span><span class="soon">即将推出</span></div></div>
+  </div>
+</div>
+
+</div><!-- /grid -->
+
+<div style="text-align:center;margin-top:30px;color:#666;font-size:12px;padding-bottom:30px">
+  <b>全部 8 个页面</b> · 39 Kotlin 文件 · 6,691 行代码<br>
+  底栏：圆角方形pill · 圆形纯文字Tab(选中蓝底) · 右侧◎设置<br>
+  固定底栏：训练(Cancel/Finish) · 编辑(✓ 保存) · 完成(返回首页)
+</div>
+</body>
+</html>

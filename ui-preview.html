@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GYM App UI Preview</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, sans-serif; background: #333; color: #fff; padding: 20px; }
+h1 { text-align: center; margin-bottom: 20px; font-size: 24px; }
+.grid { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+.phone { width: 360px; background: #f5f5f5; border-radius: 24px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+.topbar { background: #1a1a2e; color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-weight: bold; font-size: 15px; }
+.topbar .back { font-size: 18px; }
+.topbar .title { flex:1; }
+.topbar .icon { font-size: 16px; opacity: .7; }
+.content { padding: 0; }
+.stats-bar { background: #1a1a2e; display: flex; justify-content: space-around; padding: 14px 16px; }
+.stat { text-align: center; }
+.stat .val { font-size: 22px; font-weight: bold; color: #fff; }
+.stat .unit { font-size: 11px; color: #999; }
+.stat .lbl { font-size: 10px; color: #999; margin-top: 2px; }
+
+/* Search bar */
+.search-box { margin: 8px 14px; background: #fff; border-radius: 14px; display: flex; align-items: center; padding: 8px 12px; gap: 8px; }
+.search-box input { border: none; flex: 1; font-size: 13px; outline: none; color: #333; }
+.search-box .s-icon { color: #999; font-size: 14px; }
+
+/* Filter tabs */
+.tabs { display: flex; gap: 6px; padding: 0 14px; overflow-x: auto; padding-bottom: 6px; }
+.tab { padding: 6px 14px; border-radius: 20px; font-size: 12px; border: 1px solid #ddd; color: #666; white-space: nowrap; cursor: pointer; }
+.tab.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+
+/* Grid cards */
+.cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 14px; }
+.card2 { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.card2 .gif { aspect-ratio: 1; background: #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 36px; }
+.card2 .info { padding: 8px 10px; }
+.card2 .name { font-size: 12px; font-weight: bold; color: #1a1a2e; line-height: 1.3; }
+.card2 .tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; margin-top: 4px; }
+
+/* List cards */
+.list { padding: 8px 14px; display: flex; flex-direction: column; gap: 6px; }
+.card-row { background: #fff; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.card-row .avatar { width: 40px; height: 40px; border-radius: 50%; background: #e3f2fd; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.card-row .mid { flex:1; }
+.card-row .mid .n { font-size: 14px; font-weight: bold; color: #1a1a2e; }
+.card-row .mid .d { font-size: 11px; color: #999; margin-top: 2px; }
+.card-row .act { color: #2196f3; font-size: 13px; font-weight: 500; cursor: pointer; }
+.card-row .del { color: #ff7043; font-size: 16px; cursor: pointer; }
+
+/* Buttons */
+.btn { display: block; text-align: center; padding: 12px; border-radius: 10px; font-weight: bold; font-size: 14px; margin: 10px 14px; cursor: pointer; }
+.btn-green { background: #4caf50; color: #fff; }
+.btn-blue { background: #2196f3; color: #fff; }
+
+/* Exercise cards in workout */
+.ex-card { background: #fff; border-radius: 12px; margin: 6px 12px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.ex-card .ex-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.ex-card .ex-name { font-size: 15px; font-weight: bold; color: #1a1a2e; }
+.ex-card .ex-sub { font-size: 11px; color: #999; }
+.ex-card .ex-target { font-size: 12px; color: #2196f3; text-align: right; }
+.ex-row { display: flex; gap: 20px; margin-top: 8px; font-size: 12px; color: #666; }
+.ex-row b { color: #1a1a2e; }
+.sets-header { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee; cursor: pointer; }
+.sets-header .count { font-weight: bold; font-size: 13px; color: #1a1a2e; }
+.sets-header .prog { font-size: 11px; color: #4caf50; }
+.set-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
+.set-row .chk { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; }
+.set-row .chk.done { background: #4caf50; border-color: #4caf50; color: #fff; }
+.set-row .stepper { display: flex; align-items: center; gap: 4px; color: #1a1a2e; font-weight: bold; }
+.set-row .stepper span { cursor: pointer; color: #999; font-size: 16px; }
+.add-set { text-align: center; color: #999; font-size: 12px; padding: 6px; cursor: pointer; }
+
+/* Buttom bar */
+.bottom-bar { display: flex; gap: 10px; padding: 12px 14px; background: #fff; border-top:1px solid #eee; }
+.bottom-bar .btn-outline { flex:1; padding: 10px; border: 1px solid #ccc; border-radius: 10px; text-align: center; font-size: 14px; font-weight: 500; color: #1a1a2e; cursor: pointer; }
+.bottom-bar .btn-fill { flex:1; padding: 10px; background: #4caf50; color: #fff; border-radius: 10px; text-align: center; font-size: 14px; font-weight: bold; cursor: pointer; }
+
+/* Calendar */
+.cal-card { background: #fff; border-radius: 14px; margin: 8px 14px; padding: 14px; }
+.cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.cal-header .month { font-size: 16px; font-weight: bold; color: #1a1a2e; }
+.cal-header .arrow { cursor: pointer; font-size: 18px; color: #1a1a2e; }
+.cal-days { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+.cal-days .dh { font-size: 11px; color: #999; padding: 4px 0; }
+.cal-days .dd { padding: 4px 0; font-size: 13px; cursor: pointer; color: #1a1a2e; position: relative; }
+.cal-days .dd .num { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 50%; }
+.cal-days .dd.today .num { background: #e3f2fd; color: #2196f3; font-weight: bold; }
+.cal-days .dd.sel .num { background: #2196f3; color: #fff; font-weight: bold; }
+.cal-days .dd .dot { width: 4px; height: 4px; background: #4caf50; border-radius: 50%; margin: 1px auto 0; }
+
+/* Stats cards */
+.stats2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 14px; }
+.stat-card { background: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.stat-card .si { font-size: 20px; }
+.stat-card .sv { font-size: 24px; font-weight: bold; color: #1a1a2e; margin-top: 4px; }
+.stat-card .sl { font-size: 11px; color: #999; }
+
+/* Detail page */
+.detail-gif { aspect-ratio: 1; background: #000; display: flex; align-items: center; justify-content: center; position: relative; font-size: 48px; }
+.detail-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.5); padding: 12px; }
+.detail-tags { display: flex; gap: 6px; padding: 12px 14px; flex-wrap: wrap; background: #fff; }
+.detail-tag { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+.step-item { display: flex; gap: 10px; padding: 8px 14px; align-items: flex-start; background: #fff; }
+.step-num { width: 24px; height: 24px; border-radius: 50%; background: #1a1a2e; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; margin-top: 1px; }
+.step-text { font-size: 13px; color: #333; line-height: 1.4; flex:1; }
+.step-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #ddd; flex-shrink: 0; cursor: pointer; }
+
+/* Section title */
+.section-title { padding: 8px 14px 4px; font-size: 14px; font-weight: bold; color: #1a1a2e; }
+
+/* Trend */
+.trend-card { background: #fff; border-radius: 12px; margin: 6px 14px; padding: 14px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+.trend-header { display: flex; gap: 8px; margin-bottom: 6px; }
+.trend-badge { padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; }
+.badge-up { background: #e8f5e9; color: #4caf50; }
+.badge-down { background: #fff3e0; color: #ff7043; }
+.badge-same { background: #f5f5f5; color: #999; }
+.chart-placeholder { height: 100px; background: #fafafa; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #bbb; font-size: 12px; margin-top: 6px; }
+.trend-data { display: flex; gap: 16px; margin-top: 6px; font-size: 11px; }
+.trend-data .td { }
+.trend-data .td .tdl { color: #999; }
+.trend-data .td .tdv { font-weight: bold; color: #1a1a2e; font-size: 13px; }
+
+/* Complete */
+.complete-icon { text-align: center; padding: 20px; }
+.complete-icon .ci { font-size: 56px; }
+.complete-icon .ct { font-size: 22px; font-weight: bold; color: #1a1a2e; margin-top: 4px; }
+.complete-icon .cp { font-size: 14px; color: #2196f3; }
+
+.section-label { padding: 4px 14px; font-size: 11px; color: #999; }
+
+/* Plan edit */
+.edit-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fff; margin: 4px 14px; border-radius: 10px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+.edit-num { width: 28px; height: 28px; border-radius: 50%; background: #1a1a2e; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; flex-shrink:0; }
+.edit-mid { flex:1; }
+.edit-mid .en { font-size: 14px; font-weight: bold; color: #1a1a2e; }
+.edit-mid .es { font-size: 12px; color: #666; margin-top: 2px; }
+.edit-del { color: #ff7043; cursor: pointer; font-size: 18px; }
+
+h3 { font-size: 12px; color: #aaa; text-align: center; margin: 8px 0; text-transform: uppercase; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<h1>GYM App — UI Preview (All Screens)</h1>
+<div class="grid">
+
+<!-- 1. Exercise List (Search) -->
+<div class="phone">
+  <h3>1. Exercise Search</h3>
+  <div class="topbar"><span class="back">←</span><span class="title">Exercises</span><span class="icon">🔍</span><span class="icon">⋮</span></div>
+  <div class="content">
+    <div class="search-box"><span class="s-icon">🔍</span><input placeholder="Search or add new exercise"><span>🔧</span></div>
+    <div class="tabs">
+      <div class="tab active">All</div>
+      <div class="tab">Chest</div>
+      <div class="tab">Back</div>
+      <div class="tab">Shoulders</div>
+      <div class="tab">Legs</div>
+      <div class="tab">Arms</div>
+      <div class="tab">Waist</div>
+    </div>
+    <div class="cards2">
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">Barbell Bench Press</div><div class="tag" style="background:#ffe0b2;color:#e65100">Chest</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">Dumbbell Incline Press</div><div class="tag" style="background:#ffe0b2;color:#e65100">Chest</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">Cable Crossover</div><div class="tag" style="background:#ffe0b2;color:#e65100">Chest</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">Chest Dip</div><div class="tag" style="background:#ffe0b2;color:#e65100">Chest</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">Machine Chest Press</div><div class="tag" style="background:#ffcc80;color:#bf360c">Chest</div></div></div>
+      <div class="card2"><div class="gif">🏋️</div><div class="info"><div class="name">Push Up</div><div class="tag" style="background:#ffe0b2;color:#e65100">Chest</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. Exercise Detail -->
+<div class="phone">
+  <h3>2. Exercise Detail</h3>
+  <div class="topbar"><span class="back">←</span><span class="title">Detail</span><span class="icon">⋮</span></div>
+  <div class="content">
+    <div class="detail-gif">
+      🏋️‍♂️
+      <div class="detail-overlay">
+        <div style="font-size:18px;font-weight:bold;">Barbell Bench Press</div>
+        <div style="font-size:12px;opacity:.8;">Upper Chest ▶</div>
+      </div>
+    </div>
+    <div class="detail-tags">
+      <div class="detail-tag" style="background:#e3f2fd;color:#1565c0;">Shoulders</div>
+      <div class="detail-tag" style="background:#fff3e0;color:#e65100;">Upper Chest</div>
+      <div class="detail-tag" style="background:#e8f5e9;color:#2e7d32;">Barbell</div>
+    </div>
+    <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;background:#fff;">
+      <div style="font-weight:bold;font-size:14px;color:#1a1a2e;">INSTRUCTIONS</div>
+      <div style="color:#2196f3;font-size:12px;">🎬 Video tutorial ▸</div>
+    </div>
+    <div class="step-item"><div class="step-num">1</div><div class="step-text">Lie flat on your back with your knees bent and feet flat on the ground.</div><div class="step-check"></div></div>
+    <div class="step-item"><div class="step-num">2</div><div class="step-text">Place your hands behind your head with your elbows pointing outwards.</div><div class="step-check"></div></div>
+    <div class="step-item"><div class="step-num">3</div><div class="step-text">Engaging your abs, slowly lift your upper body off the ground, curling forward.</div><div class="step-check"></div></div>
+    <div class="step-item"><div class="step-num">4</div><div class="step-text">Pause for a moment at the top, then slowly lower your upper body back down.</div><div class="step-check"></div></div>
+    <div class="step-item"><div class="step-num">5</div><div class="step-text">Repeat for the desired number of repetitions.</div><div class="step-check"></div></div>
+  </div>
+</div>
+
+<!-- 3. My Plan List -->
+<div class="phone">
+  <h3>3. My Plan</h3>
+  <div class="topbar"><span class="title">My Plan</span><span class="icon">⋮</span></div>
+  <div class="content">
+    <div class="section-label">Created by you</div>
+    <div class="list">
+      <div class="card-row">
+        <div class="avatar">🏋️</div>
+        <div class="mid"><div class="n">三分化训练</div><div class="d">07/29/2026</div></div>
+        <div class="act">View</div>
+        <div class="del">🗑</div>
+      </div>
+      <div class="card-row">
+        <div class="avatar">🏋️</div>
+        <div class="mid"><div class="n">四分化训练</div><div class="d">07/25/2026</div></div>
+        <div class="act">View</div>
+        <div class="del">🗑</div>
+      </div>
+    </div>
+    <div class="card-row" style="margin:0 14px;">
+      <div class="avatar" style="background:#bbdefb;">＋</div>
+      <div class="mid"><div class="n" style="color:#2196f3;">Add new plan</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 4. Plan Detail / Edit -->
+<div class="phone">
+  <h3>4. Edit Plan (View→)</h3>
+  <div class="topbar"><span class="back">←</span><span class="title">Edit Plan</span><span class="icon">✏️</span></div>
+  <div class="content">
+    <div style="padding:12px 14px;font-size:18px;font-weight:bold;color:#1a1a2e;">三分化-推日</div>
+    <div class="edit-item"><div class="edit-num">1</div><div class="edit-mid"><div class="en">Barbell Bench Press</div><div class="es">− 3 + 组 <span style="margin-left:8px;">×</span> − 10 + 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="edit-item"><div class="edit-num">2</div><div class="edit-mid"><div class="en">Dumbbell Incline Press</div><div class="es">− 3 + 组 <span style="margin-left:8px;">×</span> − 12 + 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="edit-item"><div class="edit-num">3</div><div class="edit-mid"><div class="en">Cable Crossover</div><div class="es">− 3 + 组 <span style="margin-left:8px;">×</span> − 12 + 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="edit-item"><div class="edit-num">4</div><div class="edit-mid"><div class="en">Chest Dip</div><div class="es">− 3 + 组 <span style="margin-left:8px;">×</span> − 10 + 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="edit-item"><div class="edit-num">5</div><div class="edit-mid"><div class="en">Machine Chest Press</div><div class="es">− 3 + 组 <span style="margin-left:8px;">×</span> − 10 + 次</div></div><div class="edit-del">⊖</div></div>
+    <div class="search-box"><span class="s-icon">🔍</span><input placeholder="Search to add exercise..."></div>
+    <div class="btn btn-green" style="margin-top:10px;">✓ Save</div>
+  </div>
+</div>
+
+<!-- 5. Workout Execution -->
+<div class="phone">
+  <h3>5. Workout</h3>
+  <div class="topbar"><span class="back">←</span><span class="title">Workout</span><span class="icon">📤</span></div>
+  <div class="stats-bar">
+    <div class="stat"><div class="val">0</div><div class="unit">Lbs</div><div class="lbl">Tons lifted</div></div>
+    <div class="stat"><div class="val">00:30</div><div class="lbl">Total workout</div></div>
+  </div>
+  <div class="section-title">Training plan</div>
+  <div class="content">
+    <div class="ex-card">
+      <div class="ex-header">
+        <div><div class="ex-name">Barbell Bench Press</div><div class="ex-sub">Upper Chest</div></div>
+        <div class="ex-target">目标<br>3组×10次</div>
+      </div>
+      <div class="ex-row">
+        <div>Previous: <b>40 lb × 12</b></div>
+        <div>Best set: <b>40 lb × 12</b></div>
+      </div>
+      <div style="font-size:11px;color:#999;margin-top:6px;">💪 Muscles: Pectoralis Major, Anterior Deltoid</div>
+      <div class="sets-header"><span class="count">3 sets</span> <span class="prog">3/3</span> <span style="flex:1"></span>▼</div>
+      <div class="set-row"><div class="chk done">✓</div><div class="stepper"><span>−</span> 12 reps <span>+</span></div><div class="stepper"><span>−</span> 40 lb <span>+</span></div></div>
+      <div class="set-row"><div class="chk done">✓</div><div class="stepper"><span>−</span> 12 reps <span>+</span></div><div class="stepper"><span>−</span> 40 lb <span>+</span></div></div>
+      <div class="set-row"><div class="chk"> </div><div class="stepper"><span>−</span> 12 reps <span>+</span></div><div class="stepper"><span>−</span> 40 lb <span>+</span></div></div>
+      <div class="add-set">+ Add set</div>
+    </div>
+    <div class="ex-card">
+      <div class="ex-header">
+        <div><div class="ex-name">Dumbbell Incline Fly</div><div class="ex-sub">Upper Chest</div></div>
+        <div class="ex-target">目标<br>3组×12次</div>
+      </div>
+      <div class="ex-row">
+        <div>Previous: <b>20 lb × 12</b></div>
+        <div>Best set: <b>20 lb × 12</b></div>
+      </div>
+      <div style="font-size:11px;color:#999;margin-top:6px;">💪 Muscles: Pectoralis Major, Anterior Deltoid</div>
+      <div class="sets-header"><span class="count">3 sets</span> <span class="prog">1/3</span> <span style="flex:1"></span>▼</div>
+      <div class="set-row"><div class="chk done">✓</div><div class="stepper"><span>−</span> 12 reps <span>+</span></div><div class="stepper"><span>−</span> 20 lb <span>+</span></div></div>
+      <div class="set-row"><div class="chk"> </div><div class="stepper"><span>−</span> 12 reps <span>+</span></div><div class="stepper"><span>−</span> 20 lb <span>+</span></div></div>
+      <div class="set-row"><div class="chk"> </div><div class="stepper"><span>−</span> 12 reps <span>+</span></div><div class="stepper"><span>−</span> 20 lb <span>+</span></div></div>
+      <div class="add-set">+ Add set</div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div class="btn-outline">Cancel</div>
+    <div class="btn-fill">✓ Finish</div>
+  </div>
+</div>
+
+<!-- 6. Workout Complete / Session Detail -->
+<div class="phone">
+  <h3>6. Complete / Detail (2 in 1)</h3>
+  <div class="topbar"><span class="back">←</span><span class="title">Workout Complete</span></div>
+  <div class="content">
+    <div class="complete-icon">
+      <div class="ci">✅</div>
+      <div class="ct">训练完成！</div>
+      <div class="cp">三分化-推日</div>
+    </div>
+    <div style="display:flex;justify-content:center;gap:24px;padding:8px;background:#fff;">
+      <div class="stat" style="color:#1a1a2e;"><div class="val" style="color:#2196f3;">45m</div><div class="lbl" style="color:#999;">时长</div></div>
+      <div class="stat" style="color:#1a1a2e;"><div class="val" style="color:#2196f3;">6</div><div class="lbl" style="color:#999;">动作数</div></div>
+      <div class="stat" style="color:#1a1a2e;"><div class="val" style="color:#2196f3;">18</div><div class="lbl" style="color:#999;">总组数</div></div>
+    </div>
+    <div class="section-title">动作详情</div>
+    <div class="trend-card">
+      <div style="font-weight:bold;font-size:14px;color:#1a1a2e;">1. Barbell Bench Press</div>
+      <div class="trend-header">
+        <span class="trend-badge badge-up">↑ Weight</span>
+        <span class="trend-badge badge-same">→ Reps</span>
+        <span class="trend-badge badge-up">↑ Volume</span>
+      </div>
+      <div class="chart-placeholder">📈 Vico 折线图：40→42→45 kg (日期趋势)</div>
+      <div class="trend-data">
+        <div class="td"><div class="tdl">Max</div><div class="tdv" style="color:#2196f3;">45kg</div></div>
+        <div class="td"><div class="tdl">Reps</div><div class="tdv" style="color:#4caf50;">12</div></div>
+        <div class="td"><div class="tdl">Volume</div><div class="tdv" style="color:#ff7043;">540kg</div></div>
+      </div>
+    </div>
+    <div class="trend-card">
+      <div style="font-weight:bold;font-size:14px;color:#1a1a2e;">2. Dumbbell Incline Press</div>
+      <div class="trend-header">
+        <span class="trend-badge badge-up">↑ Weight</span>
+        <span class="trend-badge badge-up">↑ Reps</span>
+        <span class="trend-badge badge-up">↑ Volume</span>
+      </div>
+      <div class="chart-placeholder">📈 Vico 折线图：20→22→25 kg (日期趋势)</div>
+      <div class="trend-data">
+        <div class="td"><div class="tdl">Max</div><div class="tdv" style="color:#2196f3;">25kg</div></div>
+        <div class="td"><div class="tdl">Reps</div><div class="tdv" style="color:#4caf50;">12</div></div>
+        <div class="td"><div class="tdl">Volume</div><div class="tdv" style="color:#ff7043;">300kg</div></div>
+      </div>
+    </div>
+    <div class="btn btn-green">Return Home</div>
+  </div>
+</div>
+
+<!-- 7. History (Calendar) -->
+<div class="phone">
+  <h3>7. History (Calendar)</h3>
+  <div class="topbar"><span class="back">←</span><span class="title">History</span><span class="icon">⋮</span></div>
+  <div class="content">
+    <div class="stats2">
+      <div class="stat-card"><div class="si">🏋️</div><div class="sv">5</div><div class="sl">Total workouts</div></div>
+      <div class="stat-card"><div class="si">📅</div><div class="sv">3</div><div class="sl">This month</div></div>
+    </div>
+    <div class="cal-card">
+      <div class="cal-header">
+        <span class="arrow">←</span><span class="month">July 2026</span><span class="arrow">→</span>
+      </div>
+      <div class="cal-days">
+        <div class="dh">Mo</div><div class="dh">Tu</div><div class="dh">We</div><div class="dh">Th</div><div class="dh">Fr</div><div class="dh">Sa</div><div class="dh">Su</div>
+        <div class="dd"></div><div class="dd"></div><div class="dd"><span class="num">1</span></div><div class="dd"><span class="num">2</span></div><div class="dd"><span class="num">3</span></div><div class="dd"><span class="num">4</span></div><div class="dd"><span class="num">5</span></div>
+        <div class="dd"><span class="num">6</span></div><div class="dd"><span class="num">7</span></div><div class="dd"><span class="num">8</span></div><div class="dd"><span class="num">9</span></div><div class="dd"><span class="num">10</span></div><div class="dd"><span class="num">11</span></div><div class="dd"><span class="num">12</span></div>
+        <div class="dd"><span class="num">13</span><div class="dot"></div></div><div class="dd"><span class="num">14</span></div><div class="dd"><span class="num">15</span></div><div class="dd"><span class="num">16</span></div><div class="dd"><span class="num">17</span><div class="dot"></div></div><div class="dd"><span class="num">18</span></div><div class="dd"><span class="num">19</span></div>
+        <div class="dd"><span class="num">20</span></div><div class="dd"><span class="num">21</span></div><div class="dd"><span class="num">22</span></div><div class="dd"><span class="num">23</span><div class="dot"></div></div><div class="dd"><span class="num">24</span></div><div class="dd sel"><span class="num">29</span><div class="dot"></div></div>
+      </div>
+    </div>
+    <div style="font-weight:bold;font-size:14px;padding:4px 14px;color:#1a1a2e;">Jul 29, 2026</div>
+    <div class="card-row" style="margin:4px 14px;">
+      <div style="width:4px;height:40px;background:#2196f3;border-radius:2px;"></div>
+      <div style="flex:1;">
+        <div style="font-size:11px;color:#999;">07/29/2026</div>
+        <div style="font-weight:bold;color:#1a1a2e;">三分化-推日</div>
+        <div style="font-size:11px;color:#999;">⏱ 45m</div>
+      </div>
+      <div style="color:#999;">▸</div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
