@@ -4,6 +4,7 @@ import android.content.Context
 import com.gym.app.data.dao.ExerciseDao
 import com.gym.app.data.entity.Exercise
 import com.squareup.moshi.Moshi
+import com.gym.app.ui.components.ExerciseDisplayName
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
@@ -69,5 +70,6 @@ fun ExerciseJson.toEntity(): Exercise {
         target = target,
         imagePath = image,
         gifPath = gifUrl,
+        nameZh = ExerciseDisplayName.translate(name),
     )
 }

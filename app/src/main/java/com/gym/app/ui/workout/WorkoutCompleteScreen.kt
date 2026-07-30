@@ -281,7 +281,7 @@ private fun parseRepsArray(json: String): List<Int> {
         val moshi = com.squareup.moshi.Moshi.Builder()
             .addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
             .build()
-        val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, Int::class.java)
+        val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, Int::class.javaObjectType)
         moshi.adapter<List<Int>>(type).fromJson(json) ?: emptyList()
     } catch (_: Exception) {
         emptyList()
@@ -294,7 +294,7 @@ private fun parseWeightArray(json: String): List<Float> {
         val moshi = com.squareup.moshi.Moshi.Builder()
             .addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
             .build()
-        val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, Float::class.java)
+        val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
         moshi.adapter<List<Float>>(type).fromJson(json) ?: emptyList()
     } catch (_: Exception) {
         emptyList()

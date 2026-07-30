@@ -1,7 +1,6 @@
 package com.gym.app.ui.exercise
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,11 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.OndemandVideo
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,7 +34,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,6 +50,7 @@ import coil.compose.AsyncImage
 import com.gym.app.data.entity.Exercise
 import com.gym.app.data.repository.ExerciseRepository
 import com.gym.app.ui.components.LocaleStrings
+import com.gym.app.ui.components.displayName
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -132,10 +127,6 @@ private fun ExerciseDetailContent(
     modifier: Modifier = Modifier,
 ) {
     val steps = remember(exercise) { parseInstructionSteps(exercise.instructionStepsZh) }
-    // 每个步骤的完成状态
-    val completedSteps = remember { mutableStateListOf<Boolean>().apply {
-        repeat(steps.size) { add(false) }
-    } }
 
     Column(
         modifier = modifier
@@ -152,7 +143,7 @@ private fun ExerciseDetailContent(
         ) {
             AsyncImage(
                 model = "file:///android_asset/${exercise.gifPath}",
-                contentDescription = exercise.name,
+                contentDescription = exercise.displayName,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,
             )
@@ -167,32 +158,28 @@ private fun ExerciseDetailContent(
                     )
                     .padding(16.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            exercise.name,
-                            color = WhiteColor,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            ExerciseListViewModel.bodyPartLabel(exercise.bodyPart),
-                            color = WhiteColor.copy(alpha = 0.8f),
-                            fontSize = 14.sp,
-                        )
-                    }
-                    // 播放图标
-                    Icon(
-                        Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = WhiteColor,
-                        modifier = Modifier.size(36.dp),
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        exercise.displayName,
+                        color = WhiteColor,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        exercise.name,
+                        color = WhiteColor.copy(alpha = 0.6f),
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        ExerciseListViewModel.bodyPartLabel(exercise.bodyPart),
+                        color = WhiteColor.copy(alpha = 0.8f),
+                        fontSize = 14.sp,
                     )
                 }
             }
@@ -211,51 +198,19 @@ private fun ExerciseDetailContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TagChip(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), AccentBlue)
-                TagChip(exercise.target, Color(0xFFFF7043))
-                TagChip(exercise.equipment, Color(0xFF26A69A))
+                TagChip(ExerciseListViewModel.targetLabel(exercise.target), Color(0xFFFF7043))
+                TagChip(ExerciseListViewModel.equipmentLabel(exercise.equipment), Color(0xFF26A69A))
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             // INSTRUCTIONS 标题
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    LocaleStrings.instructions,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkBg,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-
-                // 视频教程链接
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { /* TODO: video */ },
-                ) {
-                    Icon(
-                        Icons.Filled.OndemandVideo,
-                        contentDescription = null,
-                        tint = AccentBlue,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        "Video tutorial",
-                        fontSize = 13.sp,
-                        color = AccentBlue,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Icon(
-                        Icons.Filled.ChevronRight,
-                        contentDescription = null,
-                        tint = AccentBlue,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-            }
+            Text(
+                LocaleStrings.instructions,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = DarkBg,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -265,12 +220,6 @@ private fun ExerciseDetailContent(
                     StepItem(
                         stepNumber = index + 1,
                         text = step,
-                        isCompleted = completedSteps.getOrElse(index) { false },
-                        onToggle = {
-                            if (index < completedSteps.size) {
-                                completedSteps[index] = !completedSteps[index]
-                            }
-                        },
                         isLast = index == steps.lastIndex,
                     )
                 }
@@ -318,8 +267,6 @@ private fun TagChip(text: String, color: Color) {
 private fun StepItem(
     stepNumber: Int,
     text: String,
-    isCompleted: Boolean,
-    onToggle: () -> Unit,
     isLast: Boolean,
 ) {
     Row(
@@ -334,7 +281,7 @@ private fun StepItem(
                 .padding(top = 2.dp)
                 .size(28.dp)
                 .clip(CircleShape)
-                .background(if (isCompleted) AccentGreen else DarkBg),
+                .background(DarkBg),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -351,39 +298,10 @@ private fun StepItem(
         Text(
             text = text.trim(),
             fontSize = 14.sp,
-            color = if (isCompleted) MediumGray else DarkBg,
+            color = DarkBg,
             lineHeight = 22.sp,
             modifier = Modifier.weight(1f),
-            textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
         )
-
-        // 完成勾选圆圈
-        Box(
-            modifier = Modifier
-                .padding(top = 2.dp, start = 8.dp)
-                .size(24.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isCompleted) AccentGreen else Color.Transparent
-                )
-                .then(
-                    if (!isCompleted) Modifier.background(
-                        MediumGray.copy(alpha = 0.2f),
-                        CircleShape,
-                    ) else Modifier
-                )
-                .clickable(onClick = onToggle),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isCompleted) {
-                Icon(
-                    Icons.Filled.Check,
-                    contentDescription = "完成",
-                    tint = WhiteColor,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        }
     }
 }
 

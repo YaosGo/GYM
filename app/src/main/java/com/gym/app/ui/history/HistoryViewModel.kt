@@ -20,9 +20,10 @@ data class HistoryUiState(
     val monthlyWorkouts: Int = 0,
     val currentYear: Int = 2026,
     val currentMonth: Int = 7, // 0-based for Calendar (6 = July)
-    val workoutDates: Set<String> = emptySet(),
+    val workoutCounts: Map<String, Int> = emptyMap(), // date → session count
     val selectedDate: String? = null,
     val selectedDateSessions: List<WorkoutSession> = emptyList(),
+    val planNames: Map<Long, String> = emptyMap(), // planId → planName
     val isLoading: Boolean = true,
 )
 
@@ -51,12 +52,13 @@ class HistoryViewModel(
 
             val total = workoutRepository.getTotalWorkoutCount()
             val monthly = workoutRepository.getMonthlyWorkoutCount(yearMonth)
-            val dates = workoutRepository.getWorkoutDatesByMonth(yearMonth).toSet()
+            val dates = workoutRepository.getWorkoutDatesByMonth(yearMonth)
+            val counts = dates.groupingBy { it }.eachCount()
 
             _uiState.value = state.copy(
                 totalWorkouts = total,
                 monthlyWorkouts = monthly,
-                workoutDates = dates,
+                workoutCounts = counts,
                 isLoading = false,
             )
         }
@@ -101,7 +103,15 @@ class HistoryViewModel(
             _uiState.value = state.copy(selectedDate = date)
             viewModelScope.launch {
                 val sessions = workoutRepository.getSessionsByDate(date)
-                _uiState.value = _uiState.value.copy(selectedDateSessions = sessions)
+                val names = mutableMapOf<Long, String>()
+                sessions.forEach { s ->
+                    val plan = workoutRepository.getPlanById(s.planId)
+                    names[s.planId] = plan?.name ?: "训练"
+                }
+                _uiState.value = _uiState.value.copy(
+                    selectedDateSessions = sessions,
+                    planNames = names,
+                )
             }
         }
     }

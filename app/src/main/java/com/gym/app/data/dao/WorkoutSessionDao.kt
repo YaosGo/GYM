@@ -48,7 +48,7 @@ interface WorkoutSessionDao {
     suspend fun getSessionsByDate(date: String): List<WorkoutSession>
 
     /** 获取指定月份的训练日期 */
-    @Query("SELECT DISTINCT date FROM workout_sessions WHERE date LIKE :yearMonth || '%' ORDER BY date ASC")
+    @Query("SELECT date FROM workout_sessions WHERE date LIKE :yearMonth || '%' ORDER BY date ASC")
     suspend fun getWorkoutDatesByMonth(yearMonth: String): List<String>
 
     /** 总训练次数 */

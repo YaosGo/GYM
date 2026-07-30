@@ -1,5 +1,6 @@
 package com.gym.app.ui.history
 
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,18 +31,23 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,7 +60,6 @@ private val AccentGreen = Color(0xFF4CAF50)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
-private val OrangeColor = Color(0xFFFF7043)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,8 +67,29 @@ fun HistoryScreen(
     viewModel: HistoryViewModel,
     onBack: (() -> Unit)? = null,
     onSessionClick: (Long) -> Unit,
+    workoutRepository: com.gym.app.data.repository.WorkoutRepository? = null,
+    exerciseRepository: com.gym.app.data.repository.ExerciseRepository? = null,
 ) {
-    val uiState by viewModel.uiState
+    val uiState by viewModel.uiState.collectAsState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var selectedSessionId by remember { mutableStateOf<Long?>(null) }
+
+    // 训练详情弹出
+    if (selectedSessionId != null && workoutRepository != null && exerciseRepository != null) {
+        ModalBottomSheet(
+            onDismissRequest = { selectedSessionId = null },
+            sheetState = sheetState,
+            containerColor = Color.Transparent,
+            dragHandle = null,
+        ) {
+            SessionDetailScreenContent(
+                sessionId = selectedSessionId!!,
+                workoutRepository = workoutRepository,
+                exerciseRepository = exerciseRepository,
+                onHome = { selectedSessionId = null },
+            )
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -72,11 +98,7 @@ fun HistoryScreen(
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = LocaleStrings.back,
-                                tint = WhiteColor,
-                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = WhiteColor)
                         }
                     }
                 },
@@ -85,27 +107,18 @@ fun HistoryScreen(
                         Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = WhiteColor)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = DarkBg,
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBg),
             )
         },
         containerColor = LightGray,
     ) { padding ->
         if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center,
-            ) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = AccentBlue)
             }
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -122,7 +135,7 @@ fun HistoryScreen(
                     WorkoutCalendar(
                         year = uiState.currentYear,
                         month = uiState.currentMonth,
-                        workoutDates = uiState.workoutDates,
+                        workoutCounts = uiState.workoutCounts,
                         selectedDate = uiState.selectedDate,
                         onDateSelected = viewModel::selectDate,
                         onPreviousMonth = viewModel::previousMonth,
@@ -130,59 +143,40 @@ fun HistoryScreen(
                     )
                 }
 
-                // 选中日期的训练列表
+                // 选中日期标题
                 if (uiState.selectedDate != null) {
                     item {
-                        Text(
-                            java.text.SimpleDateFormat(
-                                "MMM dd, yyyy",
-                                java.util.Locale.getDefault()
-                            ).format(
-                                java.text.SimpleDateFormat(
-                                    "yyyy-MM-dd",
-                                    java.util.Locale.getDefault()
-                                ).parse(uiState.selectedDate)!!
-                            ),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DarkBg,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
+                        val displayDate: String = try {
+                            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                            val parsed = sdf.parse(uiState.selectedDate!!)
+                            java.text.SimpleDateFormat("yyyy年M月d日", java.util.Locale.getDefault()).format(parsed!!)
+                        } catch (_: Exception) { uiState.selectedDate ?: "" }
+                        Text(displayDate, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg, modifier = Modifier.padding(top = 8.dp))
                     }
 
                     if (uiState.selectedDateSessions.isEmpty()) {
                         item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(80.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    "No workouts on this day",
-                                    color = MediumGray,
-                                    fontSize = 14.sp,
-                                )
+                            Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                                Text("当天没有训练记录", color = MediumGray, fontSize = 14.sp)
                             }
                         }
                     } else {
                         items(uiState.selectedDateSessions, key = { it.sessionId }) { session ->
                             SessionCard(
                                 session = session,
-                                onClick = { onSessionClick(session.sessionId) },
+                                planName = uiState.planNames[session.planId] ?: "训练",
+                                onClick = { selectedSessionId = session.sessionId },
                             )
                         }
                     }
                 } else {
                     item {
                         Text(
-                            "Select a date to view workouts",
+                            "选择日期查看训练记录",
                             color = MediumGray,
                             fontSize = 14.sp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 16.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }
@@ -192,28 +186,10 @@ fun HistoryScreen(
 }
 
 @Composable
-private fun StatsHeader(
-    totalWorkouts: Int,
-    monthlyWorkouts: Int,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Filled.FitnessCenter,
-            iconColor = AccentBlue,
-            value = "$totalWorkouts",
-            label = "Total workouts",
-        )
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Filled.CalendarMonth,
-            iconColor = AccentGreen,
-            value = "$monthlyWorkouts",
-            label = "This month",
-        )
+private fun StatsHeader(totalWorkouts: Int, monthlyWorkouts: Int) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        StatCard(modifier = Modifier.weight(1f), icon = Icons.Filled.FitnessCenter, iconColor = AccentBlue, value = "$totalWorkouts", label = "总训练次数")
+        StatCard(modifier = Modifier.weight(1f), icon = Icons.Filled.CalendarMonth, iconColor = AccentGreen, value = "$monthlyWorkouts", label = "本月")
     }
 }
 
@@ -231,80 +207,40 @@ private fun StatCard(
         colors = CardDefaults.cardColors(containerColor = WhiteColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = iconColor,
-                modifier = Modifier.size(24.dp),
-            )
+        Column(modifier = Modifier.padding(14.dp)) {
+            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                value,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = DarkBg,
-            )
-            Text(
-                label,
-                fontSize = 12.sp,
-                color = MediumGray,
-            )
+            Text(value, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = DarkBg)
+            Text(label, fontSize = 12.sp, color = MediumGray)
         }
     }
 }
 
 @Composable
-private fun SessionCard(
-    session: WorkoutSession,
-    onClick: () -> Unit,
-) {
-    val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-    val displayFormat = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.getDefault())
-
+private fun SessionCard(session: WorkoutSession, planName: String, onClick: () -> Unit) {
     val dateStr = try {
-        val parsed = dateFormat.parse(session.date)
-        if (parsed != null) displayFormat.format(parsed) else session.date
-    } catch (_: Exception) {
-        session.date
-    }
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val parsed = sdf.parse(session.date)
+        if (parsed != null) java.text.SimpleDateFormat("MM/dd", java.util.Locale.getDefault()).format(parsed) else session.date
+    } catch (_: Exception) { session.date }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = WhiteColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 左侧装饰条
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(AccentBlue),
-            )
-
+            Box(Modifier.width(4.dp).height(44.dp).clip(RoundedCornerShape(2.dp)).background(AccentBlue))
             Spacer(modifier = Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    dateStr,
-                    fontSize = 12.sp,
-                    color = MediumGray,
-                )
+                Text(dateStr, fontSize = 12.sp, color = MediumGray)
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    session.note.ifBlank { "Workout" },
+                    planName,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = DarkBg,
@@ -313,27 +249,12 @@ private fun SessionCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.Timer,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MediumGray,
-                    )
+                    Icon(Icons.Filled.Timer, null, Modifier.size(14.dp), tint = MediumGray)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        formatDuration(session.durationSeconds),
-                        fontSize = 12.sp,
-                        color = MediumGray,
-                    )
+                    Text(formatDuration(session.durationSeconds), fontSize = 12.sp, color = MediumGray)
                 }
             }
-
-            Icon(
-                Icons.Filled.ChevronRight,
-                contentDescription = "详情",
-                tint = MediumGray,
-                modifier = Modifier.size(20.dp),
-            )
+            Icon(Icons.Filled.ChevronRight, "详情", tint = MediumGray, modifier = Modifier.size(20.dp))
         }
     }
 }

@@ -17,6 +17,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,11 +27,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +49,7 @@ import kotlinx.coroutines.launch
 
 private val DarkBg = Color(0xFF1A1A2E)
 private val AccentBlue = Color(0xFF2196F3)
+private val AccentGreen = Color(0xFF4CAF50)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
@@ -53,15 +61,58 @@ fun SettingsScreen(
     scope: CoroutineScope,
     onBack: () -> Unit,
 ) {
-    val language by settings.language.collectAsState(initial = "zh")
-    val weightUnit by settings.weightUnit.collectAsState(initial = "kg")
+    // 从 DataStore 读取当前值作为初始状态
+    val savedLanguage by settings.language.collectAsState(initial = "zh")
+    val savedWeightUnit by settings.weightUnit.collectAsState(initial = "kg")
+
+    // 本地编辑状态（未保存前不生效）
+    var editLanguage by remember { mutableStateOf(savedLanguage) }
+    var editWeightUnit by remember { mutableStateOf(savedWeightUnit) }
+
+    // 首次加载时同步
+    if (editLanguage != savedLanguage && editLanguage == "zh") {
+        editLanguage = savedLanguage
+    }
+    if (editWeightUnit != savedWeightUnit && editWeightUnit == "kg") {
+        editWeightUnit = savedWeightUnit
+    }
+
+    // 是否有未保存的修改
+    val hasChanges = editLanguage != savedLanguage || editWeightUnit != savedWeightUnit
+
+    // 未保存退出提醒对话框
+    var showExitDialog by remember { mutableStateOf(false) }
+
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = { Text("未保存的修改", fontWeight = FontWeight.Bold) },
+            text = { Text("你有未保存的设置修改，确定要放弃更改并退出吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExitDialog = false
+                    onBack()
+                }) {
+                    Text("放弃更改", color = Color(0xFFE53935))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitDialog = false }) {
+                    Text("继续编辑")
+                }
+            },
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(LocaleStrings.settingsTitle, color = WhiteColor, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (hasChanges) showExitDialog = true
+                        else onBack()
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = WhiteColor)
                     }
                 },
@@ -69,6 +120,34 @@ fun SettingsScreen(
             )
         },
         containerColor = LightGray,
+        bottomBar = {
+            // 保存按钮（仅在有修改时启用）
+            Button(
+                onClick = {
+                    scope.launch {
+                        settings.setLanguage(editLanguage)
+                        settings.setWeightUnit(editWeightUnit)
+                    }
+                    onBack()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                enabled = hasChanges,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGreen,
+                    disabledContainerColor = MediumGray.copy(alpha = 0.3f),
+                ),
+            ) {
+                Text(
+                    "应用保存",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = if (hasChanges) WhiteColor else MediumGray,
+                )
+            }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -79,21 +158,21 @@ fun SettingsScreen(
         ) {
             // 语言设置
             SettingsCard(LocaleStrings.language) {
-                SelectableRow(LocaleStrings.langZh, language == "zh") {
-                    scope.launch { settings.setLanguage("zh") }
+                SelectableRow(LocaleStrings.langZh, editLanguage == "zh") {
+                    editLanguage = "zh"
                 }
-                SelectableRow(LocaleStrings.langEn, language == "en") {
-                    scope.launch { settings.setLanguage("en") }
+                SelectableRow(LocaleStrings.langEn, editLanguage == "en") {
+                    editLanguage = "en"
                 }
             }
 
             // 重量单位
             SettingsCard(LocaleStrings.weightUnit) {
-                SelectableRow(LocaleStrings.unitKg, weightUnit == "kg") {
-                    scope.launch { settings.setWeightUnit("kg") }
+                SelectableRow(LocaleStrings.unitKg, editWeightUnit == "kg") {
+                    editWeightUnit = "kg"
                 }
-                SelectableRow(LocaleStrings.unitLb, weightUnit == "lb") {
-                    scope.launch { settings.setWeightUnit("lb") }
+                SelectableRow(LocaleStrings.unitLb, editWeightUnit == "lb") {
+                    editWeightUnit = "lb"
                 }
             }
 

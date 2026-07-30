@@ -22,7 +22,7 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercises WHERE equipment = :equipment ORDER BY name ASC")
     fun getExercisesByEquipment(equipment: String): Flow<List<Exercise>>
 
-    @Query("SELECT * FROM exercises WHERE name LIKE '%' || :query || '%' ORDER BY name ASC")
+    @Query("SELECT * FROM exercises WHERE name LIKE '%' || :query || '%' OR name_zh LIKE '%' || :query || '%' ORDER BY name ASC")
     fun searchExercises(query: String): Flow<List<Exercise>>
 
     /**
@@ -67,12 +67,12 @@ interface ExerciseDao {
 
             val conditions = mutableListOf<String>()
             for (token in tokens) {
-                // 完整 token 匹配（处理英文单词如 "barbell"）
-                conditions.add("name LIKE '%' || ? || '%'")
-                // 单字符匹配（处理中文）
+                // 完整 token 匹配（英文单词 + 中文词）
+                conditions.add("(name LIKE '%' || ? || '%' OR name_zh LIKE '%' || ? || '%')")
+                // 单字符匹配（中文单字）
                 if (token.length > 1) {
                     token.forEach { char ->
-                        conditions.add("name LIKE '%' || ? || '%'")
+                        conditions.add("(name LIKE '%' || ? || '%' OR name_zh LIKE '%' || ? || '%')")
                     }
                 }
             }
@@ -82,9 +82,13 @@ interface ExerciseDao {
 
             val args = mutableListOf<Any>()
             for (token in tokens) {
-                args.add(token)
+                args.add(token) // name
+                args.add(token) // name_zh
                 if (token.length > 1) {
-                    token.forEach { char -> args.add(char.toString()) }
+                    token.forEach { char ->
+                        args.add(char.toString()) // name
+                        args.add(char.toString()) // name_zh
+                    }
                 }
             }
 

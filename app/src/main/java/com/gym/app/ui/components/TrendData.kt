@@ -36,8 +36,8 @@ data class ProgressResult(
 /** 从 ExerciseRecord 列表提取趋势数据点 */
 fun extractTrendPoints(records: List<ExerciseRecord>, dates: List<String>): List<TrendPoint> {
     val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
-    val intListType = Types.newParameterizedType(List::class.java, Int::class.java)
-    val floatListType = Types.newParameterizedType(List::class.java, Float::class.java)
+    val intListType = Types.newParameterizedType(List::class.java, Int::class.javaObjectType)
+    val floatListType = Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
 
     return records.mapIndexed { index, record ->
         val repsList: List<Int> = try {
@@ -99,7 +99,7 @@ fun calculateProgress(
 private fun parseMaxWeight(record: ExerciseRecord): Float {
     return try {
         val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
-        val type = Types.newParameterizedType(List::class.java, Float::class.java)
+        val type = Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
         val list = moshi.adapter<List<Float>>(type).fromJson(record.weight) ?: emptyList()
         list.maxOrNull() ?: 0f
     } catch (_: Exception) { 0f }
@@ -108,7 +108,7 @@ private fun parseMaxWeight(record: ExerciseRecord): Float {
 private fun parseMaxReps(record: ExerciseRecord): Int {
     return try {
         val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
-        val type = Types.newParameterizedType(List::class.java, Int::class.java)
+        val type = Types.newParameterizedType(List::class.java, Int::class.javaObjectType)
         val list = moshi.adapter<List<Int>>(type).fromJson(record.actualReps) ?: emptyList()
         list.maxOrNull() ?: 0
     } catch (_: Exception) { 0 }
@@ -117,8 +117,8 @@ private fun parseMaxReps(record: ExerciseRecord): Int {
 private fun parseTotalVolume(record: ExerciseRecord): Float {
     return try {
         val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
-        val intType = Types.newParameterizedType(List::class.java, Int::class.java)
-        val floatType = Types.newParameterizedType(List::class.java, Float::class.java)
+        val intType = Types.newParameterizedType(List::class.java, Int::class.javaObjectType)
+        val floatType = Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
         val repsList = moshi.adapter<List<Int>>(intType).fromJson(record.actualReps) ?: emptyList()
         val weightList = moshi.adapter<List<Float>>(floatType).fromJson(record.weight) ?: emptyList()
         repsList.zip(weightList).sumOf { (r, w) -> (r * w).toDouble() }.toFloat()

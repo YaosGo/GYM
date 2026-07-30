@@ -1,5 +1,6 @@
 package com.gym.app.ui.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,21 +16,18 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottomAxis
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStartAxis
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
-import com.patrykandpatrick.vico.core.cartesian.data.rememberCartesianChartModelProducer
 
 private val DarkBg = Color(0xFF1A1A2E)
 private val AccentBlue = Color(0xFF2196F3)
@@ -117,11 +115,6 @@ private fun TrendBadge(label: String, trend: Int) {
         trend < 0 -> "↓" to OrangeColor
         else -> "→" to MediumGray
     }
-    val detail = when {
-        trend > 0 -> "+$trend"
-        trend < 0 -> "$trend"
-        else -> "0"
-    }
 
     Box(
         modifier = Modifier
@@ -142,8 +135,7 @@ private fun TrendBadge(label: String, trend: Int) {
 @Composable
 private fun DataChip(label: String, value: String, color: Color) {
     Column(
-        modifier = Modifier
-            .padding(end = 16.dp),
+        modifier = Modifier.padding(end = 16.dp),
     ) {
         Text(label, fontSize = 11.sp, color = MediumGray)
         Text(value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = color)
@@ -155,31 +147,91 @@ fun WeightTrendLineChart(
     points: List<TrendPoint>,
     modifier: Modifier = Modifier,
 ) {
-    val modelProducer = rememberCartesianChartModelProducer()
+    val lineColor = AccentBlue
+    val dotColor = AccentBlue
+    val gridColor = Color(0xFFE0E0E0)
 
-    // 构建数据
-    androidx.compose.runtime.LaunchedEffect(points) {
-        val weights = points.map { it.maxWeight }
-        modelProducer.runTransaction {
-            lineSeries { series(weights) }
+    Canvas(modifier = modifier) {
+        if (points.size < 2) return@Canvas
+
+        val values = points.map { it.maxWeight.toFloat() }
+        val minVal = values.min()
+        val maxVal = values.max()
+        val range = if (maxVal == minVal) 1f else maxVal - minVal
+
+        val paddingLeft = 40f
+        val paddingRight = 16f
+        val paddingTop = 12f
+        val paddingBottom = 24f
+
+        val chartWidth = size.width - paddingLeft - paddingRight
+        val chartHeight = size.height - paddingTop - paddingBottom
+
+        // 计算每个点的坐标
+        val pointOffsets = values.mapIndexed { index, value ->
+            val x = paddingLeft + (index.toFloat() / (values.size - 1)) * chartWidth
+            val y = paddingTop + (1f - (value - minVal) / range) * chartHeight
+            Offset(x, y)
+        }
+
+        // 绘制网格线 + Y轴标签
+        val gridLines = 4
+        for (i in 0..gridLines) {
+            val fraction = i.toFloat() / gridLines
+            val y = paddingTop + (1f - fraction) * chartHeight
+            val labelValue = minVal + fraction * range
+
+            drawLine(
+                color = gridColor,
+                start = Offset(paddingLeft, y),
+                end = Offset(size.width - paddingRight, y),
+                strokeWidth = 1f,
+            )
+
+            // Y轴标签
+            drawContext.canvas.nativeCanvas.drawText(
+                labelValue.toInt().toString(),
+                4f,
+                y + 4f,
+                android.graphics.Paint().apply {
+                    color = 0xFF9E9E9E.toInt()
+                    textSize = 22f
+                    isAntiAlias = true
+                },
+            )
+        }
+
+        // 绘制折线
+        if (pointOffsets.size >= 2) {
+            val linePath = Path().apply {
+                moveTo(pointOffsets.first().x, pointOffsets.first().y)
+                for (i in 1 until pointOffsets.size) {
+                    lineTo(pointOffsets[i].x, pointOffsets[i].y)
+                }
+            }
+            drawPath(
+                path = linePath,
+                color = lineColor,
+                style = Stroke(
+                    width = 3f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                ),
+            )
+        }
+
+        // 绘制数据点
+        for (offset in pointOffsets) {
+            drawCircle(
+                color = dotColor,
+                radius = 5f,
+                center = offset,
+            )
+            drawCircle(
+                color = Color.White,
+                radius = 3f,
+                center = offset,
+            )
         }
     }
-
-    CartesianChartHost(
-        chart = rememberCartesianChart(
-            rememberLineCartesianLayer(),
-            startAxis = rememberStartAxis(),
-            bottomAxis = rememberBottomAxis(),
-        ),
-        modelProducer = modelProducer,
-        modifier = modifier,
-    )
-}
-
-private fun formatShortDate(date: String): String {
-    // yyyy-MM-dd → MM/dd
-    return try {
-        val parts = date.split("-")
-        if (parts.size == 3) "${parts[1]}/${parts[2]}" else date
-    } catch (_: Exception) { date }
 }

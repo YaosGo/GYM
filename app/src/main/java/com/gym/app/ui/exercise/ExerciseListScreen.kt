@@ -1,5 +1,6 @@
 package com.gym.app.ui.exercise
 
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.gym.app.data.entity.Exercise
 import com.gym.app.ui.components.LocaleStrings
+import com.gym.app.ui.components.displayName
 
 // 颜色常量
 private val DarkBg = Color(0xFF1A1A2E)
@@ -89,7 +91,7 @@ fun ExerciseListScreen(
     onExerciseClick: (String) -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
-    val uiState by viewModel.uiState
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -292,7 +294,7 @@ private fun ExerciseGridCard(
             ) {
                 AsyncImage(
                     model = "file:///android_asset/${exercise.gifPath}",
-                    contentDescription = exercise.name,
+                    contentDescription = exercise.displayName,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(8.dp),
@@ -307,7 +309,7 @@ private fun ExerciseGridCard(
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
                 Text(
-                    exercise.name,
+                    exercise.displayName,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
                     color = DarkBg,

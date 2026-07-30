@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>创建健身计划 - UI 预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #e0e0e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  /* 手机外壳 */
+  .phone-frame {
+    width: 390px;
+    height: 844px;
+    background: #1A1A2E;
+    border-radius: 40px;
+    padding: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .phone-screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 30px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #F5F5F5;
+  }
+
+  /* ===== TopAppBar ===== */
+  .topbar {
+    background: #1A1A2E;
+    color: #fff;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .topbar .back-btn {
+    font-size: 22px;
+    cursor: pointer;
+    color: #fff;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    transition: background .2s;
+  }
+  .topbar .back-btn:hover { background: rgba(255,255,255,0.15); }
+  .topbar .title { font-size: 18px; font-weight: 700; }
+
+  /* ===== Search Bar (FIXED) ===== */
+  .search-bar-wrap {
+    padding: 8px 14px;
+    flex-shrink: 0;
+    background: #F5F5F5;
+  }
+  .search-bar {
+    display: flex; align-items: center;
+    background: #fff;
+    border-radius: 14px;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .search-bar .search-icon { color: #9E9E9E; font-size: 18px; flex-shrink: 0; }
+  .search-bar input {
+    flex: 1; border: none; outline: none;
+    font-size: 14px; color: #1A1A2E;
+  }
+  .search-bar input::placeholder { color: #9E9E9E; }
+  .search-bar .clear-btn {
+    color: #9E9E9E; cursor: pointer;
+    font-size: 18px; width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; flex-shrink: 0;
+  }
+  .search-bar .clear-btn:hover { background: #eee; }
+
+  /* ===== Scrollable Content ===== */
+  .content-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 0 8px 0;
+  }
+
+  .section-title {
+    font-size: 14px; font-weight: 700;
+    color: #1A1A2E;
+    padding: 8px 16px;
+  }
+
+  /* Selected Exercise Card */
+  .exercise-card {
+    margin: 4px 14px;
+    background: #fff;
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .exercise-card .num {
+    width: 20px; font-size: 13px; font-weight: 700; color: #1A1A2E;
+    text-align: center;
+  }
+  .exercise-card .thumb {
+    width: 48px; height: 48px;
+    border-radius: 6px;
+    background: #e8e8e8;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+  .exercise-card .info { flex: 1; min-width: 0; }
+  .exercise-card .name {
+    font-size: 14px; font-weight: 600; color: #1A1A2E;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .exercise-card .sets-row {
+    display: flex; align-items: center; gap: 4px; margin-top: 2px;
+  }
+  .stepper {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 13px; font-weight: 700;
+  }
+  .stepper .btn-minus, .stepper .btn-plus {
+    color: #2196F3; cursor: pointer; padding: 0 4px;
+    user-select: none;
+  }
+  .stepper .val { color: #1A1A2E; }
+  .stepper .lbl { font-size: 11px; color: #9E9E9E; font-weight: 400; }
+  .exercise-card .actions {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .exercise-card .actions span {
+    width: 28px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 14px; color: #9E9E9E;
+    border-radius: 4px;
+  }
+  .exercise-card .actions span:hover { background: #eee; }
+
+  .divider {
+    margin: 6px 16px;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  /* Search Result Item */
+  .result-item {
+    margin: 3px 14px;
+    background: #fff;
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    transition: background .15s;
+  }
+  .result-item:hover { background: #f0f0f0; }
+  .result-item.added { background: rgba(255,255,255,0.5); cursor: default; }
+  .result-item .gif-thumb {
+    width: 48px; height: 48px;
+    border-radius: 6px;
+    background: #e0e0e0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .result-item .meta { flex: 1; min-width: 0; }
+  .result-item .ex-name {
+    font-size: 14px; font-weight: 600; color: #1A1A2E;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .result-item .ex-sub {
+    font-size: 11px; color: #9E9E9E;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .result-item .add-icon {
+    color: #2196F3; font-size: 20px; flex-shrink: 0;
+  }
+  .result-item .added-label {
+    color: #2196F3; font-size: 12px; font-weight: 500; flex-shrink: 0;
+  }
+
+  /* Empty/Hint state */
+  .empty-state {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 48px 20px;
+    color: #9E9E9E;
+  }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+
+  /* ===== Save Button ===== */
+  .save-bar {
+    padding: 10px 16px;
+    flex-shrink: 0;
+    background: #F5F5F5;
+  }
+  .save-btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px; font-weight: 700;
+    color: #fff; background: #2196F3;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .save-btn:hover { background: #1976D2; }
+  .save-btn:disabled {
+    background: #BDBDBD;
+    color: #fff;
+    cursor: not-allowed;
+  }
+
+  /* ===== Dialog Overlay ===== */
+  .dialog-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .dialog-box {
+    width: 320px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px 20px 16px;
+  }
+  .dialog-box h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .dialog-box p { font-size: 14px; color: #666; margin-bottom: 12px; }
+  .dialog-box input {
+    width: 100%; padding: 12px 14px;
+    border: 1px solid #ddd; border-radius: 10px;
+    font-size: 15px; outline: none;
+    margin-bottom: 16px;
+  }
+  .dialog-box input:focus { border-color: #2196F3; }
+  .dialog-actions {
+    display: flex; justify-content: flex-end; gap: 10px;
+  }
+  .dialog-actions .btn-cancel {
+    padding: 10px 18px; border: none; background: transparent;
+    color: #666; font-size: 14px; font-weight: 600;
+    border-radius: 10px; cursor: pointer;
+  }
+  .dialog-actions .btn-cancel:hover { background: #f0f0f0; }
+  .dialog-actions .btn-confirm {
+    padding: 10px 24px; border: none;
+    background: #2196F3; color: #fff;
+    font-size: 14px; font-weight: 700;
+    border-radius: 10px; cursor: pointer;
+  }
+  .dialog-actions .btn-confirm:disabled {
+    background: #BDBDBD; cursor: not-allowed;
+  }
+  .dialog-actions .btn-confirm:hover:not(:disabled) { background: #1976D2; }
+
+  /* Side-by-side layout */
+  .container {
+    display: flex; gap: 30px; flex-wrap: wrap; justify-content: center;
+    align-items: flex-start;
+  }
+  .state-label {
+    text-align: center; font-size: 13px; color: #666;
+    margin-bottom: 8px; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<!-- ====== 状态1: 初始空状态 ====== -->
+<div>
+  <div class="state-label">📱 状态 1：初始空状态（搜索栏固定上方）</div>
+  <div class="phone-frame">
+    <div class="phone-screen">
+      <!-- TopBar -->
+      <div class="topbar">
+        <div class="back-btn">←</div>
+        <div class="title">创建健身计划</div>
+      </div>
+
+      <!-- Search Bar (FIXED) -->
+      <div class="search-bar-wrap">
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="搜索动作名称（支持模糊匹配）" id="search1">
+          <span class="clear-btn" style="visibility:hidden">✕</span>
+        </div>
+      </div>
+
+      <!-- Scrollable content -->
+      <div class="content-scroll">
+        <div class="empty-state">
+          <div class="icon">🔍</div>
+          <div style="font-size:14px;">输入关键词搜索动作</div>
+          <div style="font-size:12px;margin-top:4px;">支持中英文模糊匹配</div>
+        </div>
+      </div>
+
+      <!-- Save Button (disabled - no exercises) -->
+      <div class="save-bar">
+        <button class="save-btn" disabled>保存计划</button>
+      </div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:6px;font-size:12px;color:#999;">
+    ⚪ 保存按钮灰色（未选择动作）
+  </div>
+</div>
+
+<!-- ====== 状态2: 已选动作 + 搜索结果 ====== -->
+<div>
+  <div class="state-label">📱 状态 2：已选3个动作 + 搜索"卧推"</div>
+  <div class="phone-frame">
+    <div class="phone-screen">
+      <!-- TopBar -->
+      <div class="topbar">
+        <div class="back-btn">←</div>
+        <div class="title">创建健身计划</div>
+      </div>
+
+      <!-- Search Bar (FIXED) -->
+      <div class="search-bar-wrap">
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input type="text" value="卧推" placeholder="搜索动作名称（支持模糊匹配）">
+          <span class="clear-btn">✕</span>
+        </div>
+      </div>
+
+      <!-- Scrollable content -->
+      <div class="content-scroll">
+        <!-- Selected exercises -->
+        <div class="section-title">已选动作 (3)</div>
+
+        <div class="exercise-card">
+          <div class="num">1</div>
+          <div class="thumb">🏋️</div>
+          <div class="info">
+            <div class="name">杠铃卧推 Barbell Bench Press</div>
+            <div class="sets-row">
+              <div class="stepper">
+                <span class="btn-minus">−</span><span class="val">3</span><span class="btn-plus">+</span><span class="lbl">组</span>
+              </div>
+              <span style="font-size:12px;color:#9E9E9E;"> × </span>
+              <div class="stepper">
+                <span class="btn-minus">−</span><span class="val">10</span><span class="btn-plus">+</span><span class="lbl">次</span>
+              </div>
+            </div>
+          </div>
+          <div class="actions">
+            <span title="删除">🗑</span>
+            <span title="上移">↑</span>
+            <span title="下移">↓</span>
+          </div>
+        </div>
+
+        <div class="exercise-card">
+          <div class="num">2</div>
+          <div class="thumb">🦅</div>
+          <div class="info">
+            <div class="name">哑铃飞鸟 Dumbbell Fly</div>
+            <div class="sets-row">
+              <div class="stepper">
+                <span class="btn-minus">−</span><span class="val">3</span><span class="btn-plus">+</span><span class="lbl">组</span>
+              </div>
+              <span style="font-size:12px;color:#9E9E9E;"> × </span>
+              <div class="stepper">
+                <span class="btn-minus">−</span><span class="val">12</span><span class="btn-plus">+</span><span class="lbl">次</span>
+              </div>
+            </div>
+          </div>
+          <div class="actions">
+            <span>🗑</span><span>↑</span><span>↓</span>
+          </div>
+        </div>
+
+        <div class="exercise-card">
+          <div class="num">3</div>
+          <div class="thumb">💪</div>
+          <div class="info">
+            <div class="name">上斜哑铃卧推 Incline DB Press</div>
+            <div class="sets-row">
+              <div class="stepper">
+                <span class="btn-minus">−</span><span class="val">4</span><span class="btn-plus">+</span><span class="lbl">组</span>
+              </div>
+              <span style="font-size:12px;color:#9E9E9E;"> × </span>
+              <div class="stepper">
+                <span class="btn-minus">−</span><span class="val">8</span><span class="btn-plus">+</span><span class="lbl">次</span>
+              </div>
+            </div>
+          </div>
+          <div class="actions">
+            <span>🗑</span><span>↑</span><span>↓</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Search results -->
+        <div class="section-title">搜索结果</div>
+
+        <div class="result-item" onclick="this.style.background='#e8f5e9'">
+          <div class="gif-thumb">🏋️</div>
+          <div class="meta">
+            <div class="ex-name">杠铃卧推 Barbell Bench Press</div>
+            <div class="ex-sub">胸部 · 胸大肌 · 杠铃</div>
+          </div>
+          <span class="added-label">已添加</span>
+        </div>
+
+        <div class="result-item" style="cursor:pointer">
+          <div class="gif-thumb">🏋️</div>
+          <div class="meta">
+            <div class="ex-name">窄距卧推 Close-Grip Bench Press</div>
+            <div class="ex-sub">上臂 · 肱三头肌 · 杠铃</div>
+          </div>
+          <span class="add-icon">＋</span>
+        </div>
+
+        <div class="result-item" style="cursor:pointer">
+          <div class="gif-thumb">🏋️</div>
+          <div class="meta">
+            <div class="ex-name">下斜卧推 Decline Bench Press</div>
+            <div class="ex-sub">胸部 · 胸大肌下部 · 杠铃</div>
+          </div>
+          <span class="add-icon">＋</span>
+        </div>
+      </div>
+
+      <!-- Save Button (ENABLED - has exercises) -->
+      <div class="save-bar">
+        <button class="save-btn" style="background:#2196F3; cursor:pointer">保存计划</button>
+      </div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:6px;font-size:12px;color:#4CAF50;">
+    🔵 保存按钮已启用（已选择动作）
+  </div>
+</div>
+
+<!-- ====== 状态3: 保存对话框 ====== -->
+<div>
+  <div class="state-label">💬 状态 3：点击保存后弹出计划名称对话框</div>
+  <div class="phone-frame">
+    <div class="phone-screen" style="position:relative;">
+      <!-- Background (dimmed by overlay) -->
+      <div class="topbar">
+        <div class="back-btn">←</div>
+        <div class="title">创建健身计划</div>
+      </div>
+      <div class="search-bar-wrap">
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="搜索动作名称（支持模糊匹配）">
+          <span class="clear-btn" style="visibility:hidden">✕</span>
+        </div>
+      </div>
+      <div class="content-scroll">
+        <div class="section-title">已选动作 (3)</div>
+        <div class="exercise-card">
+          <div class="num">1</div><div class="thumb">🏋️</div>
+          <div class="info"><div class="name">杠铃卧推</div><div class="sets-row"><span class="stepper"><span class="btn-minus">−</span><span class="val">3</span><span class="btn-plus">+</span><span class="lbl">组</span></span><span style="font-size:12px;color:#9E9E9E;"> × </span><span class="stepper"><span class="btn-minus">−</span><span class="val">10</span><span class="btn-plus">+</span><span class="lbl">次</span></span></div></div>
+          <div class="actions"><span>🗑</span><span>↑</span><span>↓</span></div>
+        </div>
+        <div class="exercise-card">
+          <div class="num">2</div><div class="thumb">🦅</div>
+          <div class="info"><div class="name">哑铃飞鸟</div><div class="sets-row"><span class="stepper"><span class="btn-minus">−</span><span class="val">3</span><span class="btn-plus">+</span><span class="lbl">组</span></span><span style="font-size:12px;color:#9E9E9E;"> × </span><span class="stepper"><span class="btn-minus">−</span><span class="val">12</span><span class="btn-plus">+</span><span class="lbl">次</span></span></div></div>
+          <div class="actions"><span>🗑</span><span>↑</span><span>↓</span></div>
+        </div>
+        <div class="exercise-card">
+          <div class="num">3</div><div class="thumb">💪</div>
+          <div class="info"><div class="name">上斜哑铃卧推</div><div class="sets-row"><span class="stepper"><span class="btn-minus">−</span><span class="val">4</span><span class="btn-plus">+</span><span class="lbl">组</span></span><span style="font-size:12px;color:#9E9E9E;"> × </span><span class="stepper"><span class="btn-minus">−</span><span class="val">8</span><span class="btn-plus">+</span><span class="lbl">次</span></span></div></div>
+          <div class="actions"><span>🗑</span><span>↑</span><span>↓</span></div>
+        </div>
+      </div>
+      <div class="save-bar">
+        <button class="save-btn" style="background:#2196F3">保存计划</button>
+      </div>
+
+      <!-- Dialog Overlay -->
+      <div class="dialog-overlay" style="position:absolute;">
+        <div class="dialog-box">
+          <h3>保存计划</h3>
+          <p>请输入计划名称</p>
+          <input type="text" placeholder="例如：三分化-推日" id="dialogName" autofocus>
+          <div class="dialog-actions">
+            <button class="btn-cancel">取消</button>
+            <button class="btn-confirm" disabled id="confirmBtn">确定</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:6px;font-size:12px;color:#FF9800;">
+    ⚡ 名称为空时"确定"按钮禁用，输入后启用
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<script>
+// 模拟对话框交互
+const dialogName = document.getElementById('dialogName');
+const confirmBtn = document.getElementById('confirmBtn');
+if (dialogName && confirmBtn) {
+  dialogName.addEventListener('input', function() {
+    confirmBtn.disabled = this.value.trim() === '';
+    confirmBtn.style.background = confirmBtn.disabled ? '#BDBDBD' : '#2196F3';
+  });
+}
+</script>
+
+</body>
+</html>

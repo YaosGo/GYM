@@ -25,7 +25,7 @@ import java.util.Locale
 /** 单组数据 */
 data class ActualSet(
     val reps: Int = 0,
-    val weight: Float = 0f,
+    val weight: Float = 2.5f,
     val completed: Boolean = false,
 )
 
@@ -79,10 +79,10 @@ class WorkoutViewModel(
 
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
     private val intListAdapter = moshi.adapter<List<Int>>(
-        Types.newParameterizedType(List::class.java, Int::class.java)
+        Types.newParameterizedType(List::class.java, Int::class.javaObjectType)
     )
     private val floatListAdapter = moshi.adapter<List<Float>>(
-        Types.newParameterizedType(List::class.java, Float::class.java)
+        Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
     )
     private val stringListAdapter = moshi.adapter<List<String>>(
         Types.newParameterizedType(List::class.java, String::class.java)
@@ -118,18 +118,18 @@ class WorkoutViewModel(
                 // 解析肌群
                 val muscles = parseMuscles(exercise.secondaryMuscles, exercise.target)
 
+                // 自动回填上次训练的每组重量和次数（方案C）
+                val lastReps = lastRecord?.let { parseIntArray(it.actualReps) } ?: emptyList()
+                val lastWeights = lastRecord?.let { parseFloatArray(it.weight) } ?: emptyList()
+
                 ExerciseWorkoutState(
                     exercise = exercise,
                     targetSets = pe.targetSets,
                     targetReps = pe.targetReps,
-                    actualSets = List(pe.targetSets) {
+                    actualSets = List(pe.targetSets) { setIndex ->
                         ActualSet(
-                            reps = lastRecord?.let {
-                                parseIntArray(it.actualReps).getOrElse(it.actualReps.length) { pe.targetReps }
-                            } ?: pe.targetReps,
-                            weight = lastRecord?.let {
-                                parseFloatArray(it.weight).getOrElse(0) { 0f }
-                            } ?: 0f,
+                            reps = lastReps.getOrElse(setIndex) { pe.targetReps },
+                            weight = lastWeights.getOrElse(setIndex) { 2.5f },
                         )
                     },
                     sortOrder = pe.sortOrder,
@@ -262,7 +262,7 @@ class WorkoutViewModel(
         exercises[exerciseIndex] = state.copy(
             actualSets = state.actualSets + ActualSet(
                 reps = last?.reps ?: state.targetReps,
-                weight = last?.weight ?: 0f,
+                weight = last?.weight ?: 2.5f,
             )
         )
         _uiState.value = _uiState.value.copy(

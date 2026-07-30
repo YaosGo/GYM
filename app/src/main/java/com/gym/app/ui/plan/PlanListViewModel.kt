@@ -8,6 +8,7 @@ import com.gym.app.data.entity.WorkoutPlanExercise
 import com.gym.app.data.repository.WorkoutRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -21,6 +22,7 @@ class PlanListViewModel(
 ) : ViewModel() {
 
     val uiState: StateFlow<PlanListUiState> = workoutRepository.getAllPlans()
+        .map { plans -> PlanListUiState(plans = plans) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

@@ -101,7 +101,62 @@ class ExerciseListViewModel(
             "waist" to "腰部",
         )
 
+        private val TARGET_LABELS = mapOf(
+            "abductors" to "外展肌",
+            "abs" to "腹肌",
+            "adductors" to "内收肌",
+            "biceps" to "肱二头肌",
+            "calves" to "小腿",
+            "cardiovascular system" to "心血管系统",
+            "delts" to "三角肌",
+            "forearms" to "前臂",
+            "glutes" to "臀肌",
+            "hamstrings" to "腘绳肌",
+            "lats" to "背阔肌",
+            "levator scapulae" to "肩胛提肌",
+            "pectorals" to "胸肌",
+            "quads" to "股四头肌",
+            "serratus anterior" to "前锯肌",
+            "spine" to "脊柱",
+            "traps" to "斜方肌",
+            "triceps" to "肱三头肌",
+            "upper back" to "上背",
+        )
+
+        private val EQUIPMENT_LABELS = mapOf(
+            "assisted" to "辅助",
+            "band" to "弹力带",
+            "barbell" to "杠铃",
+            "body weight" to "自重",
+            "bosu ball" to "波速球",
+            "cable" to "绳索",
+            "dumbbell" to "哑铃",
+            "elliptical machine" to "椭圆机",
+            "ez barbell" to "EZ杠铃",
+            "hammer" to "锤式",
+            "kettlebell" to "壶铃",
+            "leverage machine" to "杠杆器械",
+            "medicine ball" to "药球",
+            "olympic barbell" to "奥林匹克杠铃",
+            "resistance band" to "弹力带",
+            "roller" to "滚轴",
+            "rope" to "绳索",
+            "skierg machine" to "滑雪测功仪",
+            "sled machine" to "雪橇机",
+            "smith machine" to "史密斯机",
+            "stability ball" to "瑜伽球",
+            "stationary bike" to "固定单车",
+            "stepmill machine" to "台阶机",
+            "tire" to "轮胎",
+            "trap bar" to "六角杠",
+            "upper body ergometer" to "上身测功仪",
+            "weighted" to "负重",
+            "wheel roller" to "健腹轮",
+        )
+
         fun bodyPartLabel(en: String): String = LocaleStrings.bodyPartLabel(en)
+        fun targetLabel(en: String): String = TARGET_LABELS[en] ?: en
+        fun equipmentLabel(en: String): String = EQUIPMENT_LABELS[en] ?: en
     }
 
     class Factory(private val repository: ExerciseRepository) : ViewModelProvider.Factory {

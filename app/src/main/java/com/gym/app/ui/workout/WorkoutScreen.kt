@@ -1,5 +1,6 @@
 package com.gym.app.ui.workout
 
+import androidx.compose.runtime.collectAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -30,8 +31,9 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,6 +45,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.Popup
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -66,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.gym.app.ui.components.LocaleStrings
+import com.gym.app.ui.components.displayName
 import com.gym.app.ui.exercise.ExerciseListViewModel
 import com.gym.app.ui.history.SessionDetailScreenContent
 import kotlinx.coroutines.delay
@@ -85,12 +91,37 @@ fun WorkoutScreen(
     viewModel: WorkoutViewModel,
     workoutRepository: com.gym.app.data.repository.WorkoutRepository,
     exerciseRepository: com.gym.app.data.repository.ExerciseRepository,
+    weightUnit: String = "kg",
     onBack: () -> Unit,
     onComplete: (Long) -> Unit,
 ) {
-    val uiState by viewModel.uiState
+    val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showTips by remember { mutableStateOf(false) }
+    var showExitDialog by remember { mutableStateOf(false) }
+
+    // 退出确认弹窗
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = { Text("确认退出", fontWeight = FontWeight.Bold) },
+            text = { Text("训练正在进行中，确定要退出吗？退出后本次训练记录将不会被保存。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExitDialog = false
+                    onBack()
+                }) {
+                    Text("放弃训练", color = Color(0xFFE53935))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitDialog = false }) {
+                    Text("继续训练", color = AccentBlue)
+                }
+            },
+        )
+    }
 
     // 完成弹窗：从底部滑出
     if (uiState.showCompletionSheet && uiState.savedSessionId != null) {
@@ -112,25 +143,29 @@ fun WorkoutScreen(
         }
     }
 
-    Scaffold(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(LocaleStrings.workoutTitle, color = WhiteColor) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (uiState.isRunning || uiState.isPaused) showExitDialog = true
+                        else onBack()
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = WhiteColor)
                     }
                 },
                 actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Filled.Share, contentDescription = null, tint = WhiteColor)
+                    IconButton(onClick = { showTips = true }) {
+                        Icon(Icons.Filled.Info, contentDescription = "提示", tint = WhiteColor)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBg),
             )
         },
         bottomBar = {
-            WorkoutBottomBar(
+            if (!uiState.showCompletionSheet) WorkoutBottomBar(
                 uiState = uiState,
                 viewModel = viewModel,
                 scope = scope,
@@ -145,7 +180,7 @@ fun WorkoutScreen(
         ) {
             // 统计栏
             item {
-                StatsHeader(tonsLifted = uiState.tonsLifted, elapsedSeconds = uiState.elapsedSeconds)
+                StatsHeader(tonsLifted = uiState.tonsLifted, elapsedSeconds = uiState.elapsedSeconds, weightUnit = weightUnit)
             }
 
             // 训练计划标签
@@ -161,6 +196,7 @@ fun WorkoutScreen(
             itemsIndexed(uiState.exercises) { index, state ->
                 ExerciseWorkoutCard(
                     state = state,
+                    weightUnit = weightUnit,
                     onToggleExpanded = { viewModel.toggleExpanded(index) },
                     onToggleSetCompleted = { setIndex -> viewModel.toggleSetCompleted(index, setIndex) },
                     onAddSet = { viewModel.addSet(index) },
@@ -173,6 +209,43 @@ fun WorkoutScreen(
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
     }
+
+    // 提示气泡（右上角对齐）
+    if (showTips) {
+        Popup(
+            onDismissRequest = { showTips = false },
+            alignment = Alignment.TopEnd,
+        ) {
+            Surface(
+                modifier = Modifier.padding(top = 56.dp, end = 4.dp).width(260.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = DarkBg,
+                shadowElevation = 8.dp,
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Info, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("训练提示", color = WhiteColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "首次训练需手动记录每组的重量和次数。下次训练同一动作时，会自动填入上次每组数据。",
+                        color = WhiteColor.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showTips = false }) {
+                            Text("知道了", color = AccentBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    } // Box end
 }
 
 @Composable
@@ -203,8 +276,27 @@ private fun WorkoutBottomBar(
 
             // 状态二&三：运行中或暂停后 → 完成训练(70%) + 暂停/开始(30%)
             else -> {
-                // 完成训练按钮（70%，长按3秒触发）
-                var longPressActive by remember { mutableStateOf(false) }
+                // 完成训练按钮（70%，长按3秒触发，松手取消）
+                var isPressing by remember { mutableStateOf(false) }
+
+                // 长按计时器：仅当 isPressing = true 时运行
+                if (isPressing) {
+                    LaunchedEffect(Unit) {
+                        val startTime = System.currentTimeMillis()
+                        while (isPressing) {
+                            val elapsed = System.currentTimeMillis() - startTime
+                            val progress = (elapsed / 3000f).coerceAtMost(1f)
+                            viewModel.updateLongPressProgress(progress)
+                            if (progress >= 1f) {
+                                viewModel.triggerCompletion()
+                                isPressing = false
+                                viewModel.updateLongPressProgress(0f)
+                                break
+                            }
+                            delay(50)
+                        }
+                    }
+                }
 
                 Box(
                     modifier = Modifier
@@ -213,27 +305,12 @@ private fun WorkoutBottomBar(
                         .clip(RoundedCornerShape(12.dp))
                         .background(AccentRed)
                         .pointerInput(Unit) {
-                            detectTapGestures(
-                                onPress = {
-                                    longPressActive = true
-                                    val start = System.currentTimeMillis()
-                                    // 3 秒长按进度
-                                    while (longPressActive) {
-                                        val elapsed = System.currentTimeMillis() - start
-                                        val progress = (elapsed / 3000f).coerceAtMost(1f)
-                                        viewModel.updateLongPressProgress(progress)
-                                        if (progress >= 1f) {
-                                            viewModel.triggerCompletion()
-                                            longPressActive = false
-                                            break
-                                        }
-                                        delay(50)
-                                    }
-                                    tryAwaitRelease()
-                                    longPressActive = false
-                                    viewModel.updateLongPressProgress(0f)
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    isPressing = event.changes.any { it.pressed }
                                 }
-                            )
+                            }
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -257,7 +334,7 @@ private fun WorkoutBottomBar(
                         }
                     }
                     Text(
-                        "完成训练",
+                        if (uiState.longPressProgress > 0f) "继续按住..." else "完成训练",
                         color = WhiteColor,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
@@ -290,17 +367,18 @@ private fun WorkoutBottomBar(
             }
         }
     }
+
 }
 
 // === 复用组件 ===
 
 @Composable
-private fun StatsHeader(tonsLifted: Float, elapsedSeconds: Int) {
+private fun StatsHeader(tonsLifted: Float, elapsedSeconds: Int, weightUnit: String) {
     Row(
         modifier = Modifier.fillMaxWidth().background(DarkBg).padding(horizontal = 16.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        StatItem(LocaleStrings.tonsLifted, formatTons(tonsLifted), "Lbs")
+        StatItem(LocaleStrings.tonsLifted, formatTons(tonsLifted), weightUnit)
         StatItem(LocaleStrings.totalWorkout, formatTimer(elapsedSeconds), "")
     }
 }
@@ -323,6 +401,7 @@ private fun StatItem(label: String, value: String, unit: String) {
 @Composable
 private fun ExerciseWorkoutCard(
     state: ExerciseWorkoutState,
+    weightUnit: String,
     onToggleExpanded: () -> Unit,
     onToggleSetCompleted: (Int) -> Unit,
     onAddSet: () -> Unit,
@@ -338,15 +417,23 @@ private fun ExerciseWorkoutCard(
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // GIF 缩略图
+                AsyncImage(
+                    model = "file:///android_asset/${state.exercise.gifPath}",
+                    contentDescription = state.exercise.displayName,
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)),
+                    contentScale = ContentScale.Crop,
+                )
+                Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(state.exercise.name, fontWeight = FontWeight.Bold, color = DarkBg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(state.exercise.displayName, fontWeight = FontWeight.Bold, color = DarkBg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(ExerciseListViewModel.bodyPartLabel(state.exercise.bodyPart), fontSize = 12.sp, color = MediumGray)
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                PrevBest("上次", state.previous?.weight, state.previous?.reps, state.previous != null)
-                PrevBest("最佳", state.bestSet?.weight, state.bestSet?.reps, state.bestSet != null)
+                PrevBest("上次", state.previous?.weight, state.previous?.reps, state.previous != null, weightUnit)
+                PrevBest("最佳", state.bestSet?.weight, state.bestSet?.reps, state.bestSet != null, weightUnit)
             }
             if (state.musclesWorked.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
@@ -370,7 +457,7 @@ private fun ExerciseWorkoutCard(
             AnimatedVisibility(visible = state.isExpanded, enter = expandVertically(), exit = shrinkVertically()) {
                 Column {
                     state.actualSets.forEachIndexed { i, s ->
-                        SetRow(i + 1, s, state.actualSets.size > 1, { onToggleSetCompleted(i) }, { onRepsChanged(i, it) }, { onWeightChanged(i, it) }, { onRemoveSet(i) })
+                        SetRow(i + 1, s, state.actualSets.size > 1, weightUnit, { onToggleSetCompleted(i) }, { onRepsChanged(i, it) }, { onWeightChanged(i, it) }, { onRemoveSet(i) })
                     }
                     Row(Modifier.fillMaxWidth().clickable(onClick = onAddSet).padding(vertical = 6.dp), horizontalArrangement = Arrangement.Center) {
                         Icon(Icons.Filled.Add, null, Modifier.size(16.dp), tint = MediumGray)
@@ -383,19 +470,19 @@ private fun ExerciseWorkoutCard(
 }
 
 @Composable
-private fun PrevBest(label: String, weight: Float?, reps: Int?, hasData: Boolean) {
+private fun PrevBest(label: String, weight: Float?, reps: Int?, hasData: Boolean, unit: String) {
     Column {
         Text(label, fontSize = 11.sp, color = MediumGray)
         if (hasData && weight != null && reps != null) {
-            Text("${formatWeight(weight)} lb × $reps", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = DarkBg)
+            Text("${formatWeight(weight)} $unit × $reps", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = DarkBg)
         } else {
-            Text("— lb × —", fontSize = 13.sp, color = MediumGray)
+            Text("— $unit × —", fontSize = 13.sp, color = MediumGray)
         }
     }
 }
 
 @Composable
-private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, onToggle: () -> Unit, onReps: (Int) -> Unit, onWeight: (Float) -> Unit, onRemove: () -> Unit) {
+private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, unit: String, onToggle: () -> Unit, onReps: (Int) -> Unit, onWeight: (Float) -> Unit, onRemove: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(24.dp).clip(CircleShape).background(if (s.completed) AccentGreen else MediumGray.copy(alpha = 0.3f)).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
             if (s.completed) Icon(Icons.Filled.Check, null, tint = WhiteColor, modifier = Modifier.size(16.dp))
@@ -406,12 +493,19 @@ private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, onToggle: () -> Uni
         Text("+", Modifier.clickable { if (s.reps < 99) onReps(s.reps + 1) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = DarkBg)
         Spacer(Modifier.width(8.dp))
         Text("−", Modifier.clickable { if (s.weight > 0f) onWeight((s.weight - 2.5f).coerceAtLeast(0f)) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = if (s.weight > 0f) DarkBg else MediumGray.copy(alpha = 0.3f))
-        Text(if (s.weight > 0f) "${formatWeight(s.weight)} lb" else "— lb", fontWeight = FontWeight.Bold, color = if (s.weight > 0f) AccentGreen else MediumGray, modifier = Modifier.width(48.dp))
+        Text(if (s.weight > 0f) "${formatWeight(s.weight)} $unit" else "— $unit", fontWeight = FontWeight.Bold, color = if (s.weight > 0f) AccentGreen else MediumGray, modifier = Modifier.width(48.dp))
         Text("+", Modifier.clickable { if (s.weight < 500f) onWeight((s.weight + 2.5f).coerceAtMost(500f)) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = DarkBg)
         if (canRemove) IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) { Icon(Icons.Filled.Remove, null, Modifier.size(14.dp), tint = MediumGray) }
     }
 }
 
-private fun formatTons(t: Float): String = if (t < 1000) (if (t == t.toInt().toFloat()) "${t.toInt()}" else "%.1f".format(t)) else "%.1fk".format(t / 1000f)
+private fun formatTons(t: Float): String {
+    val v = t.toDouble()
+    return if (v < 1000) (if (v == v.toInt().toDouble()) "${v.toInt()}" else java.text.DecimalFormat("#.#").format(v))
+    else "${java.text.DecimalFormat("#.#").format(v / 1000)}k"
+}
 private fun formatTimer(sec: Int): String = "${(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}"
-private fun formatWeight(w: Float): String = if (w == w.toInt().toFloat()) "${w.toInt()}" else "%.1f".format(w)
+private fun formatWeight(w: Float): String {
+    val v = w.toDouble()
+    return if (v == v.toInt().toDouble()) "${v.toInt()}" else java.text.DecimalFormat("#.#").format(v)
+}

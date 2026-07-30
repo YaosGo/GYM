@@ -8,10 +8,11 @@ import com.gym.app.data.entity.WorkoutPlan
 import com.gym.app.data.entity.WorkoutPlanExercise
 import com.gym.app.data.repository.ExerciseRepository
 import com.gym.app.data.repository.WorkoutRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -27,13 +28,13 @@ data class SelectedExercise(
 )
 
 data class CreatePlanUiState(
-    val planName: String = "",
     val selectedExercises: List<SelectedExercise> = emptyList(),
     val searchQuery: String = "",
     val searchResults: List<Exercise> = emptyList(),
     val isSearching: Boolean = false,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
+    val showSaveDialog: Boolean = false,
 )
 
 class CreatePlanViewModel(
@@ -42,11 +43,12 @@ class CreatePlanViewModel(
     private val editPlanId: Long? = null, // null = 新建，非 null = 编辑
 ) : ViewModel() {
 
-    private val _planName = MutableStateFlow("")
     private val _selectedExercises = MutableStateFlow<List<SelectedExercise>>(emptyList())
     private val _searchQuery = MutableStateFlow("")
     private val _isSaving = MutableStateFlow(false)
     private val _isSaved = MutableStateFlow(false)
+    private val _showSaveDialog = MutableStateFlow(false)
+    private val _editPlanName = MutableStateFlow("") // 编辑模式下保存原始计划名
 
     val uiState: StateFlow<CreatePlanUiState> = combineStates()
 
@@ -55,7 +57,7 @@ class CreatePlanViewModel(
         if (editPlanId != null) {
             viewModelScope.launch {
                 val plan = workoutRepository.getPlanById(editPlanId) ?: return@launch
-                _planName.value = plan.name
+                _editPlanName.value = plan.name
                 val planExercises = workoutRepository.getPlanExercisesOnce(editPlanId)
                 val selected = planExercises.map { pe ->
                     val exercise = exerciseRepository.getExerciseById(pe.exerciseId)
@@ -68,8 +70,12 @@ class CreatePlanViewModel(
         }
     }
 
-    fun onPlanNameChanged(name: String) {
-        _planName.value = name
+    fun onShowSaveDialog() {
+        _showSaveDialog.value = true
+    }
+
+    fun onDismissSaveDialog() {
+        _showSaveDialog.value = false
     }
 
     fun onSearchQueryChanged(query: String) {
@@ -109,12 +115,13 @@ class CreatePlanViewModel(
         _selectedExercises.value = list
     }
 
-    fun savePlan(onSaved: (Long) -> Unit) {
-        val name = _planName.value.trim()
+    fun savePlan(planName: String, onSaved: (Long) -> Unit) {
+        val name = planName.trim()
         if (name.isBlank() || _selectedExercises.value.isEmpty()) return
 
         viewModelScope.launch {
             _isSaving.value = true
+            _showSaveDialog.value = false
             try {
                 val plan = WorkoutPlan(
                     planId = editPlanId ?: 0,
@@ -148,8 +155,7 @@ class CreatePlanViewModel(
     }
 
     private fun combineStates(): StateFlow<CreatePlanUiState> {
-        // 手动组合状态流
-        return _searchQuery.flatMapLatest { query ->
+        val searchFlow = _searchQuery.flatMapLatest { query ->
             if (query.isBlank()) {
                 flowOf(emptyList())
             } else {
@@ -159,45 +165,33 @@ class CreatePlanViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList(),
-        ).let { searchFlow ->
-            // Combine with other state
-            object : StateFlow<CreatePlanUiState> {
-                override val value: CreatePlanUiState
-                    get() = CreatePlanUiState(
-                        planName = _planName.value,
-                        selectedExercises = _selectedExercises.value,
-                        searchQuery = _searchQuery.value,
-                        searchResults = searchFlow.value,
-                        isSearching = _searchQuery.value.isNotBlank(),
-                        isSaving = _isSaving.value,
-                        isSaved = _isSaved.value,
-                    )
+        )
 
-                override val replayCache: List<CreatePlanUiState>
-                    get() = listOf(value)
-
-                override suspend fun collect(collector: kotlinx.coroutines.flow.FlowCollector<CreatePlanUiState>) {
-                    kotlinx.coroutines.flow.combine(
-                        _planName,
-                        _selectedExercises,
-                        _searchQuery,
-                        searchFlow,
-                        _isSaving,
-                        _isSaved,
-                    ) { name, exercises, query, results, saving, saved ->
-                        CreatePlanUiState(
-                            planName = name,
-                            selectedExercises = exercises,
-                            searchQuery = query,
-                            searchResults = results,
-                            isSearching = query.isNotBlank(),
-                            isSaving = saving,
-                            isSaved = saved,
-                        )
-                    }.collect(collector)
-                }
-            }
-        }
+        @Suppress("UNCHECKED_CAST")
+        return combine(
+            listOf<Flow<Any?>>(
+                _selectedExercises,
+                _searchQuery,
+                searchFlow,
+                _isSaving,
+                _isSaved,
+                _showSaveDialog,
+            )
+        ) { values ->
+            CreatePlanUiState(
+                selectedExercises = values[0] as List<SelectedExercise>,
+                searchQuery = values[1] as String,
+                searchResults = values[2] as List<Exercise>,
+                isSearching = (values[1] as String).isNotBlank(),
+                isSaving = values[3] as Boolean,
+                isSaved = values[4] as Boolean,
+                showSaveDialog = values[5] as Boolean,
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = CreatePlanUiState(),
+        )
     }
 
     class Factory(

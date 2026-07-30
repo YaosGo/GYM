@@ -1,6 +1,11 @@
 package com.gym.app
 
 import android.app.Application
+import android.os.Build
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.decode.ImageDecoderDecoder
+import coil.memory.MemoryCache
 import com.gym.app.data.database.AppDatabase
 import com.gym.app.data.importer.ExerciseImporter
 import com.gym.app.data.repository.ExerciseRepository
@@ -10,7 +15,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class GymApplication : Application() {
+class GymApplication : Application(), ImageLoaderFactory {
+
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .components {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    add(ImageDecoderDecoder.Factory())
+                }
+                // coil-gif 2.6.0+ auto-registers its GifDecoder for API < 28
+            }
+            .memoryCache {
+                MemoryCache.Builder(this@GymApplication)
+                    .maxSizePercent(0.25)
+                    .build()
+            }
+            .build()
+    }
 
     /** 应用级别的数据库实例 */
     val database: AppDatabase by lazy { AppDatabase.getInstance(this) }

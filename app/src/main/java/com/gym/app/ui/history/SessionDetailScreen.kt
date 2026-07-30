@@ -21,6 +21,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,6 +53,7 @@ import com.gym.app.data.repository.WorkoutRepository
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.ProgressResult
 import com.gym.app.ui.components.TrendChartCard
+import com.gym.app.ui.components.displayName
 import com.gym.app.ui.components.TrendPoint
 import com.gym.app.ui.components.calculateProgress
 import com.gym.app.ui.components.extractTrendPoints
@@ -94,7 +97,7 @@ fun SessionDetailScreen(
             val names = mutableMapOf<String, String>()
             records.forEach { r ->
                 val ex = exerciseRepository.getExerciseById(r.exerciseId)
-                if (ex != null) names[r.exerciseId] = ex.name
+                if (ex != null) names[r.exerciseId] = ex.displayName
             }
 
             // 查询历史趋势数据
@@ -281,7 +284,7 @@ fun SessionDetailScreenContent(
             val names = mutableMapOf<String, String>()
             records.forEach { r ->
                 val ex = exerciseRepository.getExerciseById(r.exerciseId)
-                if (ex != null) names[r.exerciseId] = ex.name
+                if (ex != null) names[r.exerciseId] = ex.displayName
             }
             val histories = mutableMapOf<String, List<TrendPoint>>()
             records.forEach { record ->
@@ -327,6 +330,7 @@ fun SessionDetailScreenContent(
                 StatLabel("时长", formatFullDuration(d.session.durationSeconds))
                 StatLabel("动作数", "${d.records.size}")
                 StatLabel("总组数", "${d.records.sumOf { it.actualSets }}")
+                StatLabel("总重量", formatTotalWeight(d.records))
             }
             // 动作详情
             Text("动作详情", fontWeight = FontWeight.Bold, color = DarkBg, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
@@ -366,4 +370,38 @@ private fun StatLabel(label: String, value: String) {
 private fun formatFullDuration(totalSeconds: Int): String {
     val min = totalSeconds / 60
     return if (min >= 60) "${min / 60}h ${min % 60}m" else "${min}m"
+}
+
+private fun formatTotalWeight(records: List<ExerciseRecord>): String {
+    val total = records.sumOf { record ->
+        val weights = parseFloatArray(record.weight)
+        val reps = parseIntArray(record.actualReps)
+        if (weights.size == reps.size) weights.zip(reps).sumOf { (w, r) -> (w.toDouble() * r).toDouble() }
+        else 0.0
+    }.toFloat()
+    return formatTons(total)
+}
+
+private fun formatTons(t: Float): String {
+    val v = t.toDouble()
+    return if (v < 1000) (if (v == v.toInt().toDouble()) "${v.toInt()}" else java.text.DecimalFormat("#.#").format(v))
+    else "${java.text.DecimalFormat("#.#").format(v / 1000)}k"
+}
+
+private fun parseIntArray(json: String): List<Int> {
+    if (json.isBlank() || json == "[]") return emptyList()
+    return try {
+        val moshi = com.squareup.moshi.Moshi.Builder().addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
+        val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, Int::class.javaObjectType)
+        moshi.adapter<List<Int>>(type).fromJson(json) ?: emptyList()
+    } catch (_: Exception) { emptyList() }
+}
+
+private fun parseFloatArray(json: String): List<Float> {
+    if (json.isBlank() || json == "[]") return emptyList()
+    return try {
+        val moshi = com.squareup.moshi.Moshi.Builder().addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
+        val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
+        moshi.adapter<List<Float>>(type).fromJson(json) ?: emptyList()
+    } catch (_: Exception) { emptyList() }
 }

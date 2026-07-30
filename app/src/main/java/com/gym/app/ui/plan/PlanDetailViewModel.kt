@@ -7,8 +7,11 @@ import com.gym.app.data.entity.Exercise
 import com.gym.app.data.entity.WorkoutPlanExercise
 import com.gym.app.data.repository.ExerciseRepository
 import com.gym.app.data.repository.WorkoutRepository
+import com.gym.app.ui.components.displayName
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -29,7 +32,7 @@ data class PlanExerciseItem(
     val planExercise: WorkoutPlanExercise,
     val exercise: Exercise?,
 ) {
-    val name: String get() = exercise?.name ?: planExercise.exerciseId
+    val name: String get() = exercise?.displayName ?: planExercise.exerciseId
     val bodyPart: String get() = exercise?.bodyPart ?: ""
 }
 
@@ -160,7 +163,7 @@ class PlanDetailViewModel(
     }
 
     private fun buildState(): StateFlow<PlanDetailUiState> {
-        return _searchQuery.flatMapLatest { query ->
+        val searchFlow = _searchQuery.flatMapLatest { query ->
             if (query.isBlank()) {
                 flowOf(emptyList())
             } else {
@@ -170,41 +173,28 @@ class PlanDetailViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList(),
-        ).let { searchFlow ->
-            object : StateFlow<PlanDetailUiState> {
-                override val value: PlanDetailUiState
-                    get() = PlanDetailUiState(
-                        planName = _planName.value,
-                        exercises = _exercises.value,
-                        searchQuery = _searchQuery.value,
-                        searchResults = searchFlow.value,
-                        isSearching = _searchQuery.value.isNotBlank(),
-                        isSaving = _isSaving.value,
-                        isSaved = _isSaved.value,
-                    )
+        )
 
-                override val replayCache: List<PlanDetailUiState>
-                    get() = listOf(value)
-
-                override suspend fun collect(
-                    collector: kotlinx.coroutines.flow.FlowCollector<PlanDetailUiState>
-                ) {
-                    kotlinx.coroutines.flow.combine(
-                        _planName, _exercises, _searchQuery, searchFlow, _isSaving, _isSaved,
-                    ) { name, exercises, query, results, saving, saved ->
-                        PlanDetailUiState(
-                            planName = name,
-                            exercises = exercises,
-                            searchQuery = query,
-                            searchResults = results,
-                            isSearching = query.isNotBlank(),
-                            isSaving = saving,
-                            isSaved = saved,
-                        )
-                    }.collect(collector)
-                }
-            }
-        }
+        @Suppress("UNCHECKED_CAST")
+        return combine(
+            listOf<Flow<Any?>>(
+                _planName, _exercises, _searchQuery, searchFlow, _isSaving, _isSaved,
+            )
+        ) { values ->
+            PlanDetailUiState(
+                planName = values[0] as String,
+                exercises = values[1] as List<PlanExerciseItem>,
+                searchQuery = values[2] as String,
+                searchResults = values[3] as List<Exercise>,
+                isSearching = (values[2] as String).isNotBlank(),
+                isSaving = values[4] as Boolean,
+                isSaved = values[5] as Boolean,
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = PlanDetailUiState(),
+        )
     }
 
     class Factory(

@@ -24,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.gym.app.ui.components.BottomTab
@@ -96,10 +98,11 @@ private fun MainScreen(
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
 
+    // 收集设置
+    val weightUnit by settings.weightUnit.collectAsState(initial = "kg")
+
     // 当前底部 Tab（计划/历史/动作）
     var selectedTab by rememberSaveable { mutableStateOf(NavRoutes.PLAN_LIST) }
-    // 全局搜索文本（计划/动作页签共用）
-    var globalSearchQuery by rememberSaveable { mutableStateOf("") }
 
     val bottomTabs = listOf(
         BottomTab(LocaleStrings.tabPlan, NavRoutes.PLAN_LIST),
@@ -108,18 +111,12 @@ private fun MainScreen(
     )
 
     // 判断当前是否在主 Tab 页面（显示底部导航和搜索）
-    val currentRoute = navController.currentBackStackEntry?.destination?.route
+    // 使用 currentBackStackEntryAsState 确保路由变化时自动重组
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
     val isMainTab = bottomTabs.any { it.route == currentRoute }
 
     Column(modifier = Modifier.fillMaxSize().background(LightGray)) {
-        // 全局搜索栏（固定上方，计划和动作页签显示）
-        if (isMainTab && selectedTab != NavRoutes.HISTORY_TAB) {
-            GlobalSearchBar(
-                query = globalSearchQuery,
-                onQueryChanged = { globalSearchQuery = it },
-            )
-        }
-
         // 主内容区
         Box(modifier = Modifier.weight(1f)) {
             NavHost(
@@ -158,7 +155,11 @@ private fun MainScreen(
                     )
                     CreatePlanScreen(
                         viewModel = vm,
-                        onBack = { navController.popBackStack() },
+                        onBack = {
+                            navController.navigate(NavRoutes.PLAN_LIST) {
+                                popUpTo(NavRoutes.PLAN_LIST) { inclusive = true }
+                            }
+                        },
                         onSaved = {
                             navController.navigate(NavRoutes.PLAN_LIST) {
                                 popUpTo(NavRoutes.PLAN_LIST) { inclusive = true }
@@ -180,6 +181,7 @@ private fun MainScreen(
                         viewModel = vm,
                         workoutRepository = workoutRepository,
                         exerciseRepository = exerciseRepository,
+                        weightUnit = weightUnit,
                         onBack = { navController.popBackStack() },
                         onComplete = {
                             navController.navigate(NavRoutes.PLAN_LIST) {
@@ -197,6 +199,8 @@ private fun MainScreen(
                     HistoryScreen(
                         viewModel = vm,
                         onSessionClick = { navController.navigate(NavRoutes.sessionDetail(it)) },
+                        workoutRepository = workoutRepository,
+                        exerciseRepository = exerciseRepository,
                     )
                 }
 
@@ -262,32 +266,4 @@ private fun MainScreen(
             )
         }
     }
-}
-
-@Composable
-private fun GlobalSearchBar(query: String, onQueryChanged: (String) -> Unit) {
-    TextField(
-        value = query,
-        onValueChange = onQueryChanged,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-        placeholder = { Text(LocaleStrings.searchHint, fontSize = 13.sp, color = MediumGray) },
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = MediumGray, modifier = Modifier.size(20.dp)) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChanged("") }) {
-                    Icon(Icons.Filled.Clear, contentDescription = null, tint = MediumGray, modifier = Modifier.size(18.dp))
-                }
-            }
-        },
-        singleLine = true,
-        shape = RoundedCornerShape(14.dp),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = WhiteColor,
-            unfocusedContainerColor = WhiteColor,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-        ),
-    )
 }

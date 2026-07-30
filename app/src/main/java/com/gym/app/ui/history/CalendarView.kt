@@ -1,5 +1,6 @@
 package com.gym.app.ui.history
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.sin
 
 private val DarkBg = Color(0xFF1A1A2E)
 private val AccentBlue = Color(0xFF2196F3)
@@ -39,21 +44,21 @@ private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
 
-private val dayHeaders = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+private val dayHeaders = listOf("一", "二", "三", "四", "五", "六", "日")
 
 @Composable
 fun WorkoutCalendar(
     year: Int,
     month: Int, // 0-based (Calendar.JANUARY = 0)
-    workoutDates: Set<String>,
+    workoutCounts: Map<String, Int>,
     selectedDate: String?,
     onDateSelected: (String) -> Unit,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
 ) {
     val monthNames = listOf(
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
+        "1月", "2月", "3月", "4月", "5月", "6月",
+        "7月", "8月", "9月", "10月", "11月", "12月"
     )
 
     Column(
@@ -131,13 +136,13 @@ fun WorkoutCalendar(
 
                     if (dayNum in 1..daysInMonth) {
                         val dateStr = "${year}-${(month + 1).toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}"
-                        val hasWorkout = dateStr in workoutDates
+                        val workoutCount = workoutCounts[dateStr] ?: 0
                         val isToday = dateStr == todayStr
                         val isSelected = dateStr == selectedDate
 
                         CalendarDay(
                             day = dayNum,
-                            hasWorkout = hasWorkout,
+                            workoutCount = workoutCount,
                             isToday = isToday,
                             isSelected = isSelected,
                             onClick = { onDateSelected(dateStr) },
@@ -157,20 +162,42 @@ fun WorkoutCalendar(
 @Composable
 private fun CalendarDay(
     day: Int,
-    hasWorkout: Boolean,
+    workoutCount: Int,
     isToday: Boolean,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    val outerSize = 40
+    val innerSize = 30
+    val dotColor = Color(0xFF4CAF50)
+
+    Box(
+        modifier = modifier
+            .size(outerSize.dp)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        // 日期数字
+        if (workoutCount > 0) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val cx = size.width / 2f
+                val cy = size.height / 2f
+                val ringRadius = size.width / 2f - 2.dp.toPx()
+                val dotRadius = 2.5.dp.toPx()
+                val count = workoutCount.coerceAtMost(9)
+                for (i in 0 until count) {
+                    val angle = -Math.PI / 2 + (2 * Math.PI * i / count)
+                    val dx = cx + ringRadius * cos(angle).toFloat()
+                    val dy = cy + ringRadius * sin(angle).toFloat()
+                    drawCircle(dotColor, dotRadius, Offset(dx, dy))
+                }
+            }
+        }
+
+        // 蓝色/数字圆
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(innerSize.dp)
                 .clip(CircleShape)
                 .background(
                     when {
@@ -183,7 +210,7 @@ private fun CalendarDay(
         ) {
             Text(
                 "$day",
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                 color = when {
                     isSelected -> WhiteColor
@@ -191,18 +218,6 @@ private fun CalendarDay(
                     else -> DarkBg
                 },
             )
-        }
-
-        // 训练日指示点
-        if (hasWorkout) {
-            Box(
-                modifier = Modifier
-                    .size(5.dp)
-                    .clip(CircleShape)
-                    .background(AccentGreen),
-            )
-        } else {
-            Spacer(modifier = Modifier.size(5.dp))
         }
     }
 }

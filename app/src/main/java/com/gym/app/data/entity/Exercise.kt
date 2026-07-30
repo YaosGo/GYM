@@ -51,4 +51,8 @@ data class Exercise(
     /** GIF 动图路径 (videos/XXXX-xxxxx.gif) */
     @ColumnInfo(name = "gif_path")
     val gifPath: String,
+
+    /** 中文名称（预翻译映射），可能为 null 则回退到英文 name */
+    @ColumnInfo(name = "name_zh")
+    val nameZh: String? = null,
 )

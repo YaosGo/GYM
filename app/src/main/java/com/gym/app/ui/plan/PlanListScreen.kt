@@ -1,5 +1,6 @@
 package com.gym.app.ui.plan
 
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +23,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,6 +59,7 @@ private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
 private val OrangeColor = Color(0xFFFF7043)
+private val AccentGreen = Color(0xFF4CAF50)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +69,7 @@ fun PlanListScreen(
     onPlanClick: (Long) -> Unit,
     onPlanView: (Long) -> Unit,
 ) {
-    val uiState by viewModel.uiState
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -161,7 +165,7 @@ private fun PlanCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    androidx.compose.material.icons.filled.FitnessCenter,
+                    imageVector = Icons.Filled.FitnessCenter,
                     contentDescription = null,
                     tint = AccentBlue,
                     modifier = Modifier.size(22.dp),
@@ -188,9 +192,21 @@ private fun PlanCard(
                 )
             }
 
+            // 开始训练按钮
+            TextButton(onClick = onStart) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = AccentGreen,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text("开始", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AccentGreen)
+            }
+
             // View 按钮
             TextButton(onClick = onView) {
-                Text(LocaleStrings.viewPlan, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = AccentBlue)
+                Text(LocaleStrings.viewPlan, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AccentBlue)
             }
 
             // 删除

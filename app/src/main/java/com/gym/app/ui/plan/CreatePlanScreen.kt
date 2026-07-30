@@ -1,5 +1,6 @@
 package com.gym.app.ui.plan
 
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,17 +16,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import com.gym.app.ui.exercise.ExerciseListViewModel
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,21 +41,35 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.gym.app.data.entity.Exercise
+import com.gym.app.ui.components.LocaleStrings
+import com.gym.app.ui.components.displayName
+
+private val DarkBg = Color(0xFF1A1A2E)
+private val AccentBlue = Color(0xFF2196F3)
+private val LightGray = Color(0xFFF5F5F5)
+private val MediumGray = Color(0xFF9E9E9E)
+private val WhiteColor = Color.White
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,24 +78,70 @@ fun CreatePlanScreen(
     onBack: () -> Unit,
     onSaved: (Long) -> Unit,
 ) {
-    val uiState by viewModel.uiState
+    val uiState by viewModel.uiState.collectAsState()
+
+    // 保存对话框中的计划名称（本地状态）
+    var dialogPlanName by remember { mutableStateOf("") }
+
+    // 保存对话框
+    if (uiState.showSaveDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.onDismissSaveDialog() },
+            title = { Text("保存计划", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "请输入计划名称",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = dialogPlanName,
+                        onValueChange = { dialogPlanName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("例如：三分化-推日") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.savePlan(dialogPlanName, onSaved) },
+                    enabled = dialogPlanName.isNotBlank(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentBlue,
+                    ),
+                ) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onDismissSaveDialog() }) {
+                    Text("取消")
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("创建健身计划") },
+                title = { Text("创建健身计划", color = WhiteColor, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = WhiteColor)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = DarkBg,
                 ),
             )
         },
+        containerColor = LightGray,
     ) { padding ->
         if (uiState.isSaved) {
             Box(
@@ -96,50 +160,60 @@ fun CreatePlanScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // 计划名称输入
-            OutlinedTextField(
-                value = uiState.planName,
-                onValueChange = viewModel::onPlanNameChanged,
+            // ===== 搜索栏（固定在上方）=====
+            TextField(
+                value = uiState.searchQuery,
+                onValueChange = viewModel::onSearchQueryChanged,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                label = { Text("计划名称") },
-                placeholder = { Text("例如：三分化-推日") },
-                singleLine = true,
-            )
-
-            // 已选动作区域
-            Text(
-                text = "已选动作 (${uiState.selectedExercises.size})",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-
-            if (uiState.selectedExercises.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                placeholder = {
                     Text(
-                        "还未选择动作，在下方搜索并添加",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        "搜索动作名称（支持模糊匹配）",
+                        fontSize = 14.sp,
+                        color = MediumGray,
                     )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(0.4f),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = MediumGray)
+                },
+                trailingIcon = {
+                    if (uiState.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                            Icon(Icons.Filled.Clear, contentDescription = "清除", tint = MediumGray)
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = WhiteColor,
+                    unfocusedContainerColor = WhiteColor,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+            )
+
+            // ===== 滚动内容区域（已选动作 + 搜索结果）=====
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(bottom = 8.dp),
+            ) {
+                // 已选动作区域
+                if (uiState.selectedExercises.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "已选动作 (${uiState.selectedExercises.size})",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
                     itemsIndexed(
                         uiState.selectedExercises,
-                        key = { _, se -> se.exercise.id },
+                        key = { _, se -> "sel_${se.exercise.id}" },
                     ) { index, selected ->
                         SelectedExerciseCard(
                             selected = selected,
@@ -157,65 +231,40 @@ fun CreatePlanScreen(
                             },
                         )
                     }
-                }
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 搜索添加动作
-            Text(
-                text = "搜索添加动作",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-
-            // 搜索栏
-            TextField(
-                value = uiState.searchQuery,
-                onValueChange = viewModel::onSearchQueryChanged,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                placeholder = { Text("搜索动作名称（支持模糊匹配）") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (uiState.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                            Icon(Icons.Filled.Clear, contentDescription = "清除")
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 搜索结果
-            if (uiState.isSearching) {
-                if (uiState.searchResults.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(0.6f),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            "未找到匹配的动作",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    item {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                         )
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(0.6f),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        items(uiState.searchResults, key = { it.id }) { exercise ->
+                }
+
+                // 搜索结果或提示
+                if (uiState.isSearching) {
+                    if (uiState.searchResults.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 48.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "未找到匹配的动作",
+                                    color = MediumGray,
+                                    fontSize = 14.sp,
+                                )
+                            }
+                        }
+                    } else {
+                        item {
+                            Text(
+                                text = "搜索结果",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                        items(uiState.searchResults, key = { "search_${it.id}" }) { exercise ->
                             SearchResultItem(
                                 exercise = exercise,
                                 isAlreadyAdded = uiState.selectedExercises.any {
@@ -225,50 +274,65 @@ fun CreatePlanScreen(
                             )
                         }
                     }
-                }
-            } else {
-                // 未搜索时显示提示
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(0.6f),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Filled.Search,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "输入关键词搜索动作\n支持中英文模糊匹配",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                } else if (uiState.selectedExercises.isEmpty()) {
+                    // 未搜索且没有已选动作时显示提示
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 64.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Filled.Search,
+                                    contentDescription = null,
+                                    tint = MediumGray,
+                                    modifier = Modifier.size(40.dp),
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    "输入关键词搜索动作",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MediumGray,
+                                )
+                                Text(
+                                    "支持中英文模糊匹配",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediumGray,
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // 保存按钮
+            // ===== 底部保存按钮（始终可见）=====
             Button(
-                onClick = { viewModel.savePlan(onSaved) },
+                onClick = { viewModel.onShowSaveDialog() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                enabled = uiState.planName.isNotBlank()
-                        && uiState.selectedExercises.isNotEmpty()
-                        && !uiState.isSaving,
-                shape = RoundedCornerShape(12.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                enabled = uiState.selectedExercises.isNotEmpty() && !uiState.isSaving,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentBlue,
+                ),
             ) {
                 if (uiState.isSaving) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
+                        color = WhiteColor,
+                        strokeWidth = 2.dp,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text(if (uiState.isSaving) "保存中..." else "保存计划")
+                Text(
+                    text = if (uiState.isSaving) "保存中..." else "保存计划",
+                    color = WhiteColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                )
             }
         }
     }
@@ -285,16 +349,19 @@ private fun SelectedExerciseCard(
     onMoveDown: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            containerColor = WhiteColor,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // 序号
@@ -308,7 +375,7 @@ private fun SelectedExerciseCard(
             // GIF 缩略图
             AsyncImage(
                 model = "file:///android_asset/${selected.exercise.gifPath}",
-                contentDescription = selected.exercise.name,
+                contentDescription = selected.exercise.displayName,
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(6.dp)),
@@ -320,7 +387,7 @@ private fun SelectedExerciseCard(
             // 名称 + 目标
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = selected.exercise.name,
+                    text = selected.exercise.displayName,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -402,13 +469,15 @@ private fun SearchResultItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 3.dp)
             .clickable(enabled = !isAlreadyAdded, onClick = onAdd),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isAlreadyAdded)
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            else MaterialTheme.colorScheme.surface,
+                WhiteColor.copy(alpha = 0.5f)
+            else WhiteColor,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(
             modifier = Modifier
@@ -419,9 +488,9 @@ private fun SearchResultItem(
             // GIF 缩略图
             AsyncImage(
                 model = "file:///android_asset/${exercise.gifPath}",
-                contentDescription = exercise.name,
+                contentDescription = exercise.displayName,
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(48.dp)
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(6.dp)),
                 contentScale = ContentScale.Crop,
@@ -431,7 +500,7 @@ private fun SearchResultItem(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = exercise.name,
+                    text = exercise.displayName,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -440,7 +509,7 @@ private fun SearchResultItem(
                 Text(
                     text = "${ExerciseListViewModel.bodyPartLabel(exercise.bodyPart)} · ${exercise.target} · ${exercise.equipment}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MediumGray,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -450,13 +519,13 @@ private fun SearchResultItem(
                 Text(
                     text = "已添加",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = AccentBlue,
                 )
             } else {
                 Icon(
                     Icons.Filled.Add,
                     contentDescription = "添加",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = AccentBlue,
                 )
             }
         }

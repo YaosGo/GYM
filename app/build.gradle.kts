@@ -73,9 +73,6 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-gif:2.6.0")
 
-    // Vico (Compose native chart library)
-    implementation("com.patrykandpatrick.vico:compose-m3:2.0.0-beta.2")
-
     // Moshi (JSON parsing)
     implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
     ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1")
