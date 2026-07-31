@@ -21,8 +21,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -46,11 +49,19 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,7 +69,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.BackHandler
 import com.gym.app.data.entity.Exercise
+import com.gym.app.ui.components.AnimationConfig
+import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
 
@@ -90,11 +111,31 @@ fun ExerciseListScreen(
     viewModel: ExerciseListViewModel,
     onExerciseClick: (String) -> Unit,
     onBack: (() -> Unit)? = null,
+    exerciseRepository: com.gym.app.data.repository.ExerciseRepository? = null,
+    sheetShowing: androidx.compose.runtime.MutableState<Boolean> = mutableStateOf(false),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val selectedExerciseId = remember { mutableStateOf<String?>(null) }
+    val selectedExercise = remember { mutableStateOf<Exercise?>(null) }
 
-    Scaffold(
-        topBar = {
+    var sheetContentVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedExerciseId.value) {
+        sheetShowing.value = selectedExerciseId.value != null
+        if (selectedExerciseId.value != null) {
+            delay(250L)
+            sheetContentVisible = true
+        } else {
+            sheetContentVisible = false
+        }
+    }
+
+    BackHandler(enabled = sheetContentVisible) {
+        selectedExerciseId.value = null
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
             TopAppBar(
                 title = {
                     Text(
@@ -129,6 +170,13 @@ fun ExerciseListScreen(
         },
         containerColor = LightGray,
     ) { padding ->
+        // 加载选中动作的详情
+        if (selectedExerciseId.value != null && exerciseRepository != null) {
+            LaunchedEffect(selectedExerciseId.value) {
+                selectedExercise.value = exerciseRepository.getExerciseById(selectedExerciseId.value!!)
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -171,13 +219,34 @@ fun ExerciseListScreen(
                     items(uiState.exercises, key = { it.id }) { exercise ->
                         ExerciseGridCard(
                             exercise = exercise,
-                            onClick = { onExerciseClick(exercise.id) },
+                            onClick = {
+                                if (exerciseRepository != null) {
+                                    selectedExerciseId.value = exercise.id
+                                } else {
+                                    onExerciseClick(exercise.id)
+                                }
+                            },
                         )
                     }
+
                 }
             }
         }
-    }
+    } // Scaffold 结束
+
+        // 磨砂玻璃底部滑出 — 动作详情
+        if (sheetContentVisible && selectedExercise.value != null) {
+            FrostedBottomSheet(
+                visible = true,
+                onDismiss = {
+                    selectedExerciseId.value = null
+                },
+                sheetHeightFraction = 0.96f,
+            ) {
+                ExerciseDetailSheetContent(exercise = selectedExercise.value!!)
+            }
+        }
+    } // Box end
 }
 
 @Composable
@@ -340,4 +409,122 @@ private fun ExerciseGridCard(
             }
         }
     }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 动作详情 Sheet 内容（磨砂玻璃底部滑出）
+// ═══════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExerciseDetailSheetContent(exercise: Exercise) {
+    val steps = remember(exercise) { parseInstructionSteps(exercise.instructionStepsZh) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        // GIF 展示区
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .background(Color.Black),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = "file:///android_asset/${exercise.gifPath}",
+                contentDescription = exercise.displayName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .padding(16.dp),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        exercise.displayName,
+                        color = WhiteColor,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(exercise.name, color = WhiteColor.copy(alpha = 0.6f), fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), color = WhiteColor.copy(alpha = 0.8f), fontSize = 14.sp)
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth().background(WhiteColor).padding(16.dp),
+        ) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TagChip(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), AccentBlue)
+                TagChip(ExerciseListViewModel.targetLabel(exercise.target), Color(0xFFFF7043))
+                TagChip(ExerciseListViewModel.equipmentLabel(exercise.equipment), Color(0xFF26A69A))
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(LocaleStrings.instructions, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (steps.isNotEmpty()) {
+                steps.forEachIndexed { index, step ->
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(animationSpec = tween(durationMillis = AnimationConfig.Stagger.itemDurationMs, delayMillis = index * AnimationConfig.Stagger.sheetStepDelayMs)) +
+                                slideInVertically(animationSpec = tween(durationMillis = AnimationConfig.Stagger.itemDurationMs, delayMillis = index * AnimationConfig.Stagger.sheetStepDelayMs)) { it / 2 },
+                    ) {
+                        StepChip(stepNumber = index + 1, text = step)
+                    }
+                }
+            } else {
+                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LightGray).padding(16.dp)) {
+                    Text(exercise.instructionsZh, color = DarkBg, lineHeight = 24.sp)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun TagChip(text: String, color: Color) {
+    Box(
+        modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = color)
+    }
+}
+
+@Composable
+private fun StepChip(stepNumber: Int, text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(Modifier.padding(top = 2.dp).size(26.dp).clip(CircleShape).background(DarkBg), contentAlignment = Alignment.Center) {
+            Text("$stepNumber", color = WhiteColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(text.trim(), fontSize = 14.sp, color = DarkBg, lineHeight = 22.sp, modifier = Modifier.weight(1f))
+    }
+}
+
+private fun parseInstructionSteps(json: String): List<String> {
+    if (json.isBlank() || json == "[]") return emptyList()
+    return try {
+        val moshi = com.squareup.moshi.Moshi.Builder()
+            .addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
+        val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java)
+        moshi.adapter<List<String>>(type).fromJson(json) ?: emptyList()
+    } catch (_: Exception) { emptyList() }
 }

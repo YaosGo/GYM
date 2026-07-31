@@ -47,8 +47,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.tween
 import com.gym.app.data.entity.Exercise
 import com.gym.app.data.repository.ExerciseRepository
+import com.gym.app.ui.components.AnimationConfig
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
 import com.squareup.moshi.Moshi
@@ -217,11 +222,17 @@ private fun ExerciseDetailContent(
             // 分步指导
             if (steps.isNotEmpty()) {
                 steps.forEachIndexed { index, step ->
-                    StepItem(
-                        stepNumber = index + 1,
-                        text = step,
-                        isLast = index == steps.lastIndex,
-                    )
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(animationSpec = tween(durationMillis = AnimationConfig.Stagger.itemDurationMs, delayMillis = index * AnimationConfig.Stagger.detailStepDelayMs)) +
+                                slideInVertically(animationSpec = tween(durationMillis = AnimationConfig.Stagger.itemDurationMs, delayMillis = index * AnimationConfig.Stagger.detailStepDelayMs)) { it / 2 },
+                    ) {
+                        StepItem(
+                            stepNumber = index + 1,
+                            text = step,
+                            isLast = index == steps.lastIndex,
+                        )
+                    }
                 }
             } else {
                 // 兜底：展示完整中文指导

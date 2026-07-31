@@ -1,6 +1,15 @@
 package com.gym.app.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -43,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.gym.app.ui.components.AnimationConfig
 import com.gym.app.ui.components.LocaleStrings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -204,16 +214,31 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
 
 @Composable
 private fun SelectableRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) AccentBlue.copy(alpha = 0.08f) else Color.Transparent,
+        animationSpec = tween(AnimationConfig.Selector.bgColorMs),
+        label = "selBg",
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) AccentBlue else DarkBg,
+        animationSpec = tween(AnimationConfig.Selector.textColorMs),
+        label = "selText",
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, fontSize = 14.sp, color = if (selected) AccentBlue else DarkBg, modifier = Modifier.weight(1f))
-        if (selected) {
+        Text(label, fontSize = 14.sp, color = textColor, modifier = Modifier.weight(1f))
+        AnimatedVisibility(
+            visible = selected,
+            enter = fadeIn(tween(AnimationConfig.Selector.checkFadeInMs)) + scaleIn(spring(dampingRatio = AnimationConfig.Press.springDamping, stiffness = AnimationConfig.Press.springStiff)),
+            exit = fadeOut(tween(AnimationConfig.Selector.checkFadeOutMs)),
+        ) {
             Icon(Icons.Filled.Check, contentDescription = null, tint = AccentBlue, modifier = Modifier.size(20.dp))
         }
     }

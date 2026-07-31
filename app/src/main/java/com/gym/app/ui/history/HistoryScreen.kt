@@ -31,28 +31,39 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
 import com.gym.app.data.entity.WorkoutSession
+import com.gym.app.ui.components.AnimationConfig
+import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
+import com.gym.app.ui.components.pressEffect
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 private val DarkBg = Color(0xFF1A1A2E)
 private val AccentBlue = Color(0xFF2196F3)
@@ -69,117 +80,139 @@ fun HistoryScreen(
     onSessionClick: (Long) -> Unit,
     workoutRepository: com.gym.app.data.repository.WorkoutRepository? = null,
     exerciseRepository: com.gym.app.data.repository.ExerciseRepository? = null,
+    sheetShowing: androidx.compose.runtime.MutableState<Boolean> = mutableStateOf(false),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedSessionId by remember { mutableStateOf<Long?>(null) }
+    val selectedSessionId = remember { mutableStateOf<Long?>(null) }
+    val sheetContentVisible = remember { mutableStateOf(false) }
+    val sheetTriggered = selectedSessionId.value != null &&
+            workoutRepository != null && exerciseRepository != null
 
-    // 训练详情弹出
-    if (selectedSessionId != null && workoutRepository != null && exerciseRepository != null) {
-        ModalBottomSheet(
-            onDismissRequest = { selectedSessionId = null },
-            sheetState = sheetState,
-            containerColor = Color.Transparent,
-            dragHandle = null,
-        ) {
-            SessionDetailScreenContent(
-                sessionId = selectedSessionId!!,
-                workoutRepository = workoutRepository,
-                exerciseRepository = exerciseRepository,
-                onHome = { selectedSessionId = null },
-            )
+    // 通知导航栏 + 控制面板显隐
+    LaunchedEffect(sheetTriggered) {
+        sheetShowing.value = sheetTriggered
+        if (sheetTriggered) {
+            delay(250L)
+            sheetContentVisible.value = true
+        } else {
+            sheetContentVisible.value = false
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(LocaleStrings.historyTitle, color = WhiteColor, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = WhiteColor)
+    // 返回键关闭面板
+    BackHandler(enabled = sheetContentVisible.value) {
+        selectedSessionId.value = null
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 主内容区 — 固定不动，作为面板的下层
+        Scaffold(
+                topBar = {
+                TopAppBar(
+                    title = { Text(LocaleStrings.historyTitle, color = WhiteColor, fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        if (onBack != null) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = WhiteColor)
+                            }
                         }
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* more */ }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = WhiteColor)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBg),
-            )
-        },
-        containerColor = LightGray,
-    ) { padding ->
-        if (uiState.isLoading) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AccentBlue)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                // 统计头
-                item {
-                    StatsHeader(
-                        totalWorkouts = uiState.totalWorkouts,
-                        monthlyWorkouts = uiState.monthlyWorkouts,
-                    )
+                    },
+                    actions = {
+                        IconButton(onClick = { /* more */ }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = WhiteColor)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBg),
+                )
+            },
+            containerColor = LightGray,
+        ) { padding ->
+            if (uiState.isLoading) {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = AccentBlue)
                 }
-
-                // 日历
-                item {
-                    WorkoutCalendar(
-                        year = uiState.currentYear,
-                        month = uiState.currentMonth,
-                        workoutCounts = uiState.workoutCounts,
-                        selectedDate = uiState.selectedDate,
-                        onDateSelected = viewModel::selectDate,
-                        onPreviousMonth = viewModel::previousMonth,
-                        onNextMonth = viewModel::nextMonth,
-                    )
-                }
-
-                // 选中日期标题
-                if (uiState.selectedDate != null) {
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    // 统计头
                     item {
-                        val displayDate: String = try {
-                            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                            val parsed = sdf.parse(uiState.selectedDate!!)
-                            java.text.SimpleDateFormat("yyyy年M月d日", java.util.Locale.getDefault()).format(parsed!!)
-                        } catch (_: Exception) { uiState.selectedDate ?: "" }
-                        Text(displayDate, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg, modifier = Modifier.padding(top = 8.dp))
+                        StatsHeader(
+                            totalWorkouts = uiState.totalWorkouts,
+                            monthlyWorkouts = uiState.monthlyWorkouts,
+                        )
                     }
 
-                    if (uiState.selectedDateSessions.isEmpty()) {
+                    // 日历
+                    item {
+                        WorkoutCalendar(
+                            year = uiState.currentYear,
+                            month = uiState.currentMonth,
+                            workoutCounts = uiState.workoutCounts,
+                            selectedDate = uiState.selectedDate,
+                            onDateSelected = viewModel::selectDate,
+                            onPreviousMonth = viewModel::previousMonth,
+                            onNextMonth = viewModel::nextMonth,
+                        )
+                    }
+
+                    // 选中日期标题
+                    if (uiState.selectedDate != null) {
                         item {
-                            Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                                Text("当天没有训练记录", color = MediumGray, fontSize = 14.sp)
+                            val displayDate: String = try {
+                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                                val parsed = sdf.parse(uiState.selectedDate!!)
+                                java.text.SimpleDateFormat("yyyy年M月d日", java.util.Locale.getDefault()).format(parsed!!)
+                            } catch (_: Exception) { uiState.selectedDate ?: "" }
+                            Text(displayDate, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg, modifier = Modifier.padding(top = 8.dp))
+                        }
+
+                        if (uiState.selectedDateSessions.isEmpty()) {
+                            item {
+                                Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                                    Text("当天没有训练记录", color = MediumGray, fontSize = 14.sp)
+                                }
+                            }
+                        } else {
+                            items(uiState.selectedDateSessions, key = { it.sessionId }) { session ->
+                                SessionCard(
+                                    session = session,
+                                    planName = uiState.planNames[session.planId] ?: "训练",
+                                    onClick = { selectedSessionId.value = session.sessionId },
+                                )
                             }
                         }
                     } else {
-                        items(uiState.selectedDateSessions, key = { it.sessionId }) { session ->
-                            SessionCard(
-                                session = session,
-                                planName = uiState.planNames[session.planId] ?: "训练",
-                                onClick = { selectedSessionId = session.sessionId },
+                        item {
+                            Text(
+                                "选择日期查看训练记录",
+                                color = MediumGray,
+                                fontSize = 14.sp,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                textAlign = TextAlign.Center,
                             )
                         }
                     }
-                } else {
-                    item {
-                        Text(
-                            "选择日期查看训练记录",
-                            color = MediumGray,
-                            fontSize = 14.sp,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                            textAlign = TextAlign.Center,
-                        )
-                    }
                 }
+            }
+            } // Scaffold 结束
+
+        // 磨砂玻璃底部滑出
+        if (sheetContentVisible.value && sheetTriggered) {
+            FrostedBottomSheet(
+                visible = true,
+                onDismiss = {
+                    selectedSessionId.value = null
+                },
+            ) {
+                SessionDetailScreenContent(
+                    sessionId = selectedSessionId.value!!,
+                    workoutRepository = workoutRepository,
+                    exerciseRepository = exerciseRepository,
+                    onHome = { selectedSessionId.value = null },
+                )
             }
         }
     }
@@ -201,8 +234,14 @@ private fun StatCard(
     value: String,
     label: String,
 ) {
+    val numericValue = value.toIntOrNull() ?: 0
+    val animatedValue by animateIntAsState(
+        targetValue = numericValue,
+        animationSpec = tween(durationMillis = AnimationConfig.Stat.countUpMs),
+        label = "statCount",
+    )
     Card(
-        modifier = modifier,
+        modifier = modifier.pressEffect(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = WhiteColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -210,7 +249,7 @@ private fun StatCard(
         Column(modifier = Modifier.padding(14.dp)) {
             Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.height(8.dp))
-            Text(value, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = DarkBg)
+            Text("${if (numericValue > 0) animatedValue else value}", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = DarkBg)
             Text(label, fontSize = 12.sp, color = MediumGray)
         }
     }
@@ -260,6 +299,13 @@ private fun SessionCard(session: WorkoutSession, planName: String, onClick: () -
 }
 
 private fun formatDuration(totalSeconds: Int): String {
-    val min = totalSeconds / 60
-    return if (min >= 60) "${min / 60}h ${min % 60}m" else "${min}m"
+    if (totalSeconds == 0) return "0s"
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return buildString {
+        if (hours > 0) append("${hours}h ")
+        if (minutes > 0) append("${minutes}m ")
+        if (seconds > 0 || (hours == 0 && minutes == 0)) append("${seconds}s")
+    }.trim()
 }

@@ -184,9 +184,12 @@ private fun CalendarDay(
                 val cy = size.height / 2f
                 val ringRadius = size.width / 2f - 2.dp.toPx()
                 val dotRadius = 2.5.dp.toPx()
-                val count = workoutCount.coerceAtMost(9)
+                // 最多 12 个点，从 6 点钟方向逆时针排列，每个点位于整点时刻
+                val count = workoutCount.coerceAtMost(12)
+                val angleStep = (2.0 * Math.PI) / 12.0
                 for (i in 0 until count) {
-                    val angle = -Math.PI / 2 + (2 * Math.PI * i / count)
+                    // 6 点钟 = -PI/2，逆时针 = 角度增加（6→7→8→...→5）
+                    val angle = -Math.PI / 2 + angleStep * i
                     val dx = cx + ringRadius * cos(angle).toFloat()
                     val dy = cy + ringRadius * sin(angle).toFloat()
                     drawCircle(dotColor, dotRadius, Offset(dx, dy))

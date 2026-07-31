@@ -64,6 +64,7 @@ import coil.compose.AsyncImage
 import com.gym.app.data.entity.Exercise
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
+import com.gym.app.ui.components.pressEffect
 
 private val DarkBg = Color(0xFF1A1A2E)
 private val AccentBlue = Color(0xFF2196F3)
@@ -351,7 +352,8 @@ private fun SelectedExerciseCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 4.dp),
+            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .pressEffect(),
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
             containerColor = WhiteColor,

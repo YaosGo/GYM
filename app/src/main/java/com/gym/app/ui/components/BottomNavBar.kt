@@ -1,5 +1,8 @@
 package com.gym.app.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,9 +19,11 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -42,58 +47,70 @@ fun GymBottomNavBar(
     onTabSelected: (String) -> Unit,
     onSettingsClick: () -> Unit,
 ) {
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .height(48.dp)
+            .shadow(12.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(DarkBg)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .shadow(10.dp, RoundedCornerShape(16.dp))
-                .clip(RoundedCornerShape(16.dp))
-                .background(DarkBg)
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            // 完美圆形 Tab（等宽高）
-            tabs.forEach { tab ->
-                val isSelected = selectedRoute == tab.route
-                Box(
-                    modifier = Modifier
-                        .size(44.dp) // 固定等宽高 = 完美圆形
-                        .clip(CircleShape)
-                        .background(if (isSelected) AccentBlue else Color.Transparent)
-                        .clickable { onTabSelected(tab.route) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        tab.label,
-                        color = if (isSelected) WhiteColor else MediumGray,
-                        fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    )
-                }
-            }
+        tabs.forEach { tab ->
+            val isSelected = selectedRoute == tab.route
 
-            // 右侧圆形设置按钮
+            val bgColor by animateColorAsState(
+                targetValue = if (isSelected) AccentBlue else Color.Transparent,
+                animationSpec = tween(AnimationConfig.NavBar.tabColorMs),
+                label = "tabBg",
+            )
+            val scale by animateFloatAsState(
+                targetValue = if (isSelected) AnimationConfig.NavBar.tabSelectedScale else 1f,
+                animationSpec = tween(AnimationConfig.NavBar.tabScaleMs),
+                label = "tabScale",
+            )
+
             Box(
                 modifier = Modifier
                     .size(40.dp)
+                    .scale(scale)
                     .clip(CircleShape)
-                    .background(MediumGray.copy(alpha = 0.2f))
-                    .clickable { onSettingsClick() },
+                    .background(bgColor)
+                    .clickable { onTabSelected(tab.route) },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    Icons.Filled.Settings,
-                    contentDescription = LocaleStrings.settingsTitle,
-                    tint = WhiteColor,
-                    modifier = Modifier.size(20.dp),
+                val textColor by animateColorAsState(
+                    targetValue = if (isSelected) WhiteColor else MediumGray,
+                    animationSpec = tween(AnimationConfig.NavBar.tabTextMs),
+                    label = "tabText",
+                )
+                Text(
+                    tab.label,
+                    color = textColor,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 )
             }
+        }
+
+        // 设置按钮
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MediumGray.copy(alpha = 0.2f))
+                .clickable { onSettingsClick() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Settings,
+                contentDescription = LocaleStrings.settingsTitle,
+                tint = WhiteColor,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

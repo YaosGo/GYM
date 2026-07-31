@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,6 +53,7 @@ import com.gym.app.data.entity.WorkoutSession
 import com.gym.app.data.repository.ExerciseRepository
 import com.gym.app.data.repository.WorkoutRepository
 import com.gym.app.ui.components.LocaleStrings
+import com.gym.app.ui.components.pressEffect
 import com.gym.app.ui.components.ProgressResult
 import com.gym.app.ui.components.TrendChartCard
 import com.gym.app.ui.components.displayName
@@ -271,6 +274,7 @@ fun SessionDetailScreenContent(
     workoutRepository: WorkoutRepository,
     exerciseRepository: ExerciseRepository,
     onHome: () -> Unit,
+    showHomeButton: Boolean = true,
 ) {
     var detail by remember { mutableStateOf<SessionDetailData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -308,7 +312,8 @@ fun SessionDetailScreenContent(
         modifier = Modifier
             .fillMaxWidth()
             .background(WhiteColor)
-            .padding(bottom = 16.dp),
+            .padding(bottom = 16.dp)
+            .verticalScroll(rememberScrollState()),
     ) {
         if (isLoading) {
             Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
@@ -346,14 +351,16 @@ fun SessionDetailScreenContent(
                     progressResult = progress,
                 )
             }
-            // 返回按钮
-            Button(
-                onClick = onHome,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-            ) {
-                Text(LocaleStrings.returnHome, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            // 返回按钮（仅非 Sheet 模式显示）
+            if (showHomeButton) {
+                Button(
+                    onClick = onHome,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
+                ) {
+                    Text(LocaleStrings.returnHome, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
             }
         }
     }

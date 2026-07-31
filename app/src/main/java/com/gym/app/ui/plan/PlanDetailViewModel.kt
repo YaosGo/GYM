@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -20,12 +21,16 @@ import kotlinx.coroutines.launch
 
 data class PlanDetailUiState(
     val planName: String = "",
+    val createdDate: Long = 0L,
     val exercises: List<PlanExerciseItem> = emptyList(),
     val searchQuery: String = "",
     val searchResults: List<Exercise> = emptyList(),
     val isSearching: Boolean = false,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
+    val totalSessions: Int = 0,
+    val trendPoints: List<com.gym.app.ui.components.TrendPoint> = emptyList(),
+    val totalDurationSec: Int = 0,
 )
 
 data class PlanExerciseItem(
@@ -43,10 +48,14 @@ class PlanDetailViewModel(
 ) : ViewModel() {
 
     private val _planName = MutableStateFlow("")
+    private val _createdDate = MutableStateFlow(0L)
     private val _searchQuery = MutableStateFlow("")
     private val _isSaving = MutableStateFlow(false)
     private val _isSaved = MutableStateFlow(false)
     private val _exercises = MutableStateFlow<List<PlanExerciseItem>>(emptyList())
+    private val _totalSessions = MutableStateFlow(0)
+    private val _trendPoints = MutableStateFlow<List<com.gym.app.ui.components.TrendPoint>>(emptyList())
+    private val _totalDurationSec = MutableStateFlow(0)
 
     val uiState: StateFlow<PlanDetailUiState> = buildState()
 
@@ -54,8 +63,72 @@ class PlanDetailViewModel(
         viewModelScope.launch {
             val plan = workoutRepository.getPlanById(planId)
             _planName.value = plan?.name ?: ""
+            _createdDate.value = plan?.createdDate ?: 0L
             loadExercises()
+            loadTrainingData()
         }
+    }
+
+    fun deletePlan(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            val plan = workoutRepository.getPlanById(planId)
+            if (plan != null) {
+                workoutRepository.deletePlan(plan)
+                onDeleted()
+            }
+        }
+    }
+
+    private suspend fun loadTrainingData() {
+        val sessions: List<com.gym.app.data.entity.WorkoutSession> =
+            workoutRepository.getSessionsByPlanId(planId).let { it.first() }
+        var totalDuration = 0
+        for (s in sessions) { totalDuration += s.durationSeconds }
+
+        val moshi = com.squareup.moshi.Moshi.Builder()
+            .addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
+        val intListType = com.squareup.moshi.Types.newParameterizedType(
+            List::class.java, Int::class.javaObjectType
+        )
+        val floatListType = com.squareup.moshi.Types.newParameterizedType(
+            List::class.java, Float::class.javaObjectType
+        )
+
+        val points = mutableListOf<com.gym.app.ui.components.TrendPoint>()
+        for (session in sessions) {
+            val records = workoutRepository.getRecordsBySessionId(session.sessionId)
+            var totalVolume = 0.0
+            var maxWeight = 0f
+            var maxReps = 0
+            for (record in records) {
+                val weightList: List<Float> = try {
+                    moshi.adapter<List<Float>>(floatListType).fromJson(record.weight) ?: emptyList()
+                } catch (_: Exception) { emptyList() }
+                val repsList: List<Int> = try {
+                    moshi.adapter<List<Int>>(intListType).fromJson(record.actualReps) ?: emptyList()
+                } catch (_: Exception) { emptyList() }
+                val size = if (weightList.size <= repsList.size) weightList.size else repsList.size
+                for (i in 0 until size) {
+                    totalVolume += (weightList[i] * repsList[i]).toDouble()
+                }
+                val wm = weightList.maxOrNull() ?: 0f
+                if (wm > maxWeight) maxWeight = wm
+                val rm = repsList.maxOrNull() ?: 0
+                if (rm > maxReps) maxReps = rm
+            }
+            points.add(
+                com.gym.app.ui.components.TrendPoint(
+                    date = session.date,
+                    maxWeight = maxWeight,
+                    maxReps = maxReps,
+                    totalVolume = totalVolume.toFloat(),
+                )
+            )
+        }
+
+        _totalSessions.value = sessions.size
+        _trendPoints.value = points
+        _totalDurationSec.value = totalDuration
     }
 
     private fun loadExercises() {
@@ -178,17 +251,22 @@ class PlanDetailViewModel(
         @Suppress("UNCHECKED_CAST")
         return combine(
             listOf<Flow<Any?>>(
-                _planName, _exercises, _searchQuery, searchFlow, _isSaving, _isSaved,
+                _planName, _createdDate, _exercises, _searchQuery, searchFlow,
+                _isSaving, _isSaved, _totalSessions, _trendPoints, _totalDurationSec,
             )
         ) { values ->
             PlanDetailUiState(
                 planName = values[0] as String,
-                exercises = values[1] as List<PlanExerciseItem>,
-                searchQuery = values[2] as String,
-                searchResults = values[3] as List<Exercise>,
-                isSearching = (values[2] as String).isNotBlank(),
-                isSaving = values[4] as Boolean,
-                isSaved = values[5] as Boolean,
+                createdDate = values[1] as Long,
+                exercises = values[2] as List<PlanExerciseItem>,
+                searchQuery = values[3] as String,
+                searchResults = values[4] as List<Exercise>,
+                isSearching = (values[3] as String).isNotBlank(),
+                isSaving = values[5] as Boolean,
+                isSaved = values[6] as Boolean,
+                totalSessions = values[7] as Int,
+                trendPoints = values[8] as List<com.gym.app.ui.components.TrendPoint>,
+                totalDurationSec = values[9] as Int,
             )
         }.stateIn(
             scope = viewModelScope,

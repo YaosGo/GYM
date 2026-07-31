@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -53,7 +55,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,7 +71,12 @@ import coil.compose.AsyncImage
 import com.gym.app.data.entity.Exercise
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
+import com.gym.app.ui.components.pressEffect
+import com.gym.app.ui.components.TrendPoint
 import com.gym.app.ui.exercise.ExerciseListViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val DarkBg = Color(0xFF1A1A2E)
 private val AccentBlue = Color(0xFF2196F3)
@@ -148,6 +161,11 @@ fun PlanDetailScreen(
                 },
                 actions = {
                     if (!isEditing) {
+                        IconButton(onClick = {
+                            viewModel.deletePlan { onBack() }
+                        }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "删除计划", tint = WhiteColor)
+                        }
                         IconButton(onClick = { isEditing = true }) {
                             Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = WhiteColor)
                         }
@@ -182,16 +200,33 @@ fun PlanDetailScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // 计划名称
-            Text(
-                uiState.planName,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = DarkBg,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            // 计划名称 + 元信息
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Text(
+                    uiState.planName,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkBg,
+                )
+                if (!isEditing) {
+                    val dateStr = if (uiState.createdDate > 0) {
+                        val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
+                        sdf.format(Date(uiState.createdDate))
+                    } else ""
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (dateStr.isNotEmpty()) {
+                            Text("创建于 $dateStr", fontSize = 13.sp, color = MediumGray)
+                        }
+                        Text("${uiState.totalSessions} 次训练", fontSize = 13.sp, color = MediumGray)
+                        if (uiState.totalDurationSec > 0) {
+                            Text("共 ${formatFullDuration(uiState.totalDurationSec)}", fontSize = 13.sp, color = MediumGray)
+                        }
+                    }
+                }
+            }
 
-            // 动作列表
+            // 动作列表 + 趋势图
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -268,6 +303,28 @@ fun PlanDetailScreen(
                         }
                     }
                 }
+
+                // 查看模式：训练趋势图
+                if (!isEditing) {
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (uiState.trendPoints.size >= 2) {
+                            PlanTrendSection(trendPoints = uiState.trendPoints)
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "还未完成过当前计划",
+                                    color = MediumGray,
+                                    fontSize = 14.sp,
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
             }
         }
     }
@@ -290,7 +347,7 @@ private fun ExerciseItemCard(
     onMoveDown: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().pressEffect(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = WhiteColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -442,4 +499,185 @@ private fun SearchAddItem(exercise: Exercise, isAdded: Boolean, onAdd: () -> Uni
             }
         }
     }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 计划级别趋势图（汇总所有动作的总训练量）
+// ═══════════════════════════════════════════════════════════════
+
+@Composable
+private fun PlanTrendSection(trendPoints: List<TrendPoint>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = WhiteColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                "训练成果趋势",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = DarkBg,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // 百分比变化标签行
+            if (trendPoints.size >= 2) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    for (i in 1 until trendPoints.size) {
+                        val prev = trendPoints[i - 1]
+                        val curr = trendPoints[i]
+                        val change = if (prev.totalVolume > 0) {
+                            ((curr.totalVolume - prev.totalVolume) / prev.totalVolume * 100f).toInt()
+                        } else 0
+                        val (symbol, color) = when {
+                            change > 0 -> "↑" to AccentGreen
+                            change < 0 -> "↓" to OrangeColor
+                            else -> "→" to MediumGray
+                        }
+                        val shortDate = trendPoints[i].date.takeLast(5) // MM-DD
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(color.copy(alpha = 0.1f))
+                                .padding(horizontal = 6.dp, vertical = 3.dp),
+                        ) {
+                            Text(
+                                "$shortDate $symbol${kotlin.math.abs(change)}%",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = color,
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 折线图
+            PlanTotalVolumeChart(
+                points = trendPoints,
+                modifier = Modifier.fillMaxWidth().height(160.dp),
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // 图例
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(AccentBlue)
+                        .size(8.dp),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("总训练量 (kg)", fontSize = 11.sp, color = MediumGray)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlanTotalVolumeChart(
+    points: List<TrendPoint>,
+    modifier: Modifier = Modifier,
+) {
+    val lineColor = AccentBlue
+    val gridColor = Color(0xFFE0E0E0)
+
+    Canvas(modifier = modifier) {
+        if (points.size < 2) return@Canvas
+
+        val values = points.map { it.totalVolume.toFloat() }
+        val minVal = values.min()
+        val maxVal = values.max()
+        val range = if (maxVal == minVal) 1f else maxVal - minVal
+
+        val paddingLeft = 44f
+        val paddingRight = 16f
+        val paddingTop = 12f
+        val paddingBottom = 28f
+
+        val chartWidth = size.width - paddingLeft - paddingRight
+        val chartHeight = size.height - paddingTop - paddingBottom
+
+        // 数据点
+        val pointOffsets = values.mapIndexed { index, value ->
+            val x = paddingLeft + (index.toFloat() / (values.size - 1)) * chartWidth
+            val y = paddingTop + (1f - (value - minVal) / range) * chartHeight
+            Offset(x, y)
+        }
+
+        // 网格 + Y轴标签
+        val gridLines = 3
+        for (i in 0..gridLines) {
+            val fraction = i.toFloat() / gridLines
+            val y = paddingTop + (1f - fraction) * chartHeight
+            val labelValue = minVal + fraction * range
+            drawLine(gridColor, Offset(paddingLeft, y), Offset(size.width - paddingRight, y), 1f)
+            drawContext.canvas.nativeCanvas.drawText(
+                labelValue.toInt().toString(), 4f, y + 4f,
+                android.graphics.Paint().apply { color = 0xFF9E9E9E.toInt(); textSize = 22f; isAntiAlias = true },
+            )
+        }
+
+        // 面积填充（半透明）
+        if (pointOffsets.size >= 2) {
+            val areaPath = Path().apply {
+                moveTo(pointOffsets.first().x, pointOffsets.first().y)
+                for (i in 1 until pointOffsets.size) {
+                    lineTo(pointOffsets[i].x, pointOffsets[i].y)
+                }
+                // 闭合到底部
+                lineTo(pointOffsets.last().x, paddingTop + chartHeight)
+                lineTo(pointOffsets.first().x, paddingTop + chartHeight)
+                close()
+            }
+            drawPath(areaPath, lineColor.copy(alpha = 0.1f))
+        }
+
+        // 折线
+        if (pointOffsets.size >= 2) {
+            val linePath = Path().apply {
+                moveTo(pointOffsets.first().x, pointOffsets.first().y)
+                for (i in 1 until pointOffsets.size) {
+                    lineTo(pointOffsets[i].x, pointOffsets[i].y)
+                }
+            }
+            drawPath(linePath, lineColor, style = Stroke(width = 3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+
+        // 数据点 + 标签
+        for ((i, offset) in pointOffsets.withIndex()) {
+            drawCircle(lineColor, 5f, offset)
+            drawCircle(Color.White, 3f, offset)
+
+            // X轴日期标签
+            if (points.size <= 12 || i % (points.size / 6).coerceAtLeast(1) == 0 || i == points.lastIndex) {
+                val dateLabel = points[i].date.takeLast(5)
+                drawContext.canvas.nativeCanvas.drawText(
+                    dateLabel, offset.x - 16f, size.height - 4f,
+                    android.graphics.Paint().apply { color = 0xFF9E9E9E.toInt(); textSize = 20f; isAntiAlias = true },
+                )
+            }
+        }
+    }
+}
+
+private fun formatFullDuration(totalSeconds: Int): String {
+    if (totalSeconds == 0) return "0s"
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    return buildString {
+        if (hours > 0) append("${hours}h")
+        if (minutes > 0 || hours == 0) append("${minutes}m")
+    }.trim()
 }

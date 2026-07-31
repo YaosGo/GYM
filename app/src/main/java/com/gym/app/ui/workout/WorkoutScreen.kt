@@ -2,8 +2,15 @@ package com.gym.app.ui.workout
 
 import androidx.compose.runtime.collectAsState
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -32,6 +39,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Info
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -42,7 +50,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -51,18 +58,19 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -70,8 +78,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.gym.app.ui.components.AnimationConfig
+import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
+import com.gym.app.ui.components.pressEffect
 import com.gym.app.ui.exercise.ExerciseListViewModel
 import com.gym.app.ui.history.SessionDetailScreenContent
 import kotlinx.coroutines.delay
@@ -94,12 +105,23 @@ fun WorkoutScreen(
     weightUnit: String = "kg",
     onBack: () -> Unit,
     onComplete: (Long) -> Unit,
+    sheetShowing: androidx.compose.runtime.MutableState<Boolean> = mutableStateOf(false),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showTips by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
+
+    var sheetContentVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.showCompletionSheet) {
+        sheetShowing.value = uiState.showCompletionSheet
+        if (uiState.showCompletionSheet) {
+            delay(250L)
+            sheetContentVisible = true
+        } else {
+            sheetContentVisible = false
+        }
+    }
 
     // 退出确认弹窗
     if (showExitDialog) {
@@ -123,24 +145,9 @@ fun WorkoutScreen(
         )
     }
 
-    // 完成弹窗：从底部滑出
-    if (uiState.showCompletionSheet && uiState.savedSessionId != null) {
-        ModalBottomSheet(
-            onDismissRequest = { viewModel.dismissCompletionSheet() },
-            sheetState = sheetState,
-            containerColor = Color.Transparent,
-            dragHandle = null,
-        ) {
-            SessionDetailScreenContent(
-                sessionId = uiState.savedSessionId!!,
-                workoutRepository = workoutRepository,
-                exerciseRepository = exerciseRepository,
-                onHome = {
-                    viewModel.dismissCompletionSheet()
-                    onComplete(uiState.savedSessionId!!)
-                },
-            )
-        }
+    // 系统返回键拦截：面板显示时关闭面板
+    BackHandler(enabled = sheetContentVisible) {
+        viewModel.dismissCompletionSheet()
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -244,7 +251,27 @@ fun WorkoutScreen(
                 }
             }
         }
-    }
+    } // Scaffold 结束
+
+        // 完成弹窗：磨砂玻璃底部滑出
+        if (sheetContentVisible && uiState.savedSessionId != null) {
+            FrostedBottomSheet(
+                visible = true,
+                onDismiss = {
+                    viewModel.dismissCompletionSheet()
+                },
+            ) {
+                SessionDetailScreenContent(
+                    sessionId = uiState.savedSessionId!!,
+                    workoutRepository = workoutRepository,
+                    exerciseRepository = exerciseRepository,
+                    onHome = {
+                        onComplete(uiState.savedSessionId!!)
+                    },
+                    showHomeButton = false,
+            )
+            }
+        } // if sheetContentVisible
     } // Box end
 }
 
@@ -410,7 +437,7 @@ private fun ExerciseWorkoutCard(
     onWeightChanged: (Int, Float) -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).pressEffect(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = WhiteColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -483,9 +510,27 @@ private fun PrevBest(label: String, weight: Float?, reps: Int?, hasData: Boolean
 
 @Composable
 private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, unit: String, onToggle: () -> Unit, onReps: (Int) -> Unit, onWeight: (Float) -> Unit, onRemove: () -> Unit) {
+    val checkScale by animateFloatAsState(
+        targetValue = if (s.completed) 1f else 0.3f,
+        animationSpec = spring(dampingRatio = AnimationConfig.CheckMark.scaleDamping, stiffness = AnimationConfig.CheckMark.scaleStiffness),
+        label = "checkScale",
+    )
+    val checkBgColor by animateColorAsState(
+        targetValue = if (s.completed) AccentGreen else MediumGray.copy(alpha = 0.3f),
+        animationSpec = tween(AnimationConfig.CheckMark.bgColorMs),
+        label = "checkBg",
+    )
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(24.dp).clip(CircleShape).background(if (s.completed) AccentGreen else MediumGray.copy(alpha = 0.3f)).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
-            if (s.completed) Icon(Icons.Filled.Check, null, tint = WhiteColor, modifier = Modifier.size(16.dp))
+        Box(
+            Modifier.size(24.dp).clip(CircleShape).background(checkBgColor).clickable(onClick = onToggle),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (s.completed) {
+                Icon(
+                    Icons.Filled.Check, null, tint = WhiteColor,
+                    modifier = Modifier.size(16.dp).scale(checkScale),
+                )
+            }
         }
         Spacer(Modifier.width(8.dp))
         Text("−", Modifier.clickable { if (s.reps > 0) onReps(s.reps - 1) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = if (s.reps > 0) DarkBg else MediumGray.copy(alpha = 0.3f))

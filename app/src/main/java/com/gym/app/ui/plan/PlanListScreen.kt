@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -49,9 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gym.app.data.entity.WorkoutPlan
 import com.gym.app.ui.components.LocaleStrings
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.gym.app.ui.components.pressEffect
 
 private val DarkBg = Color(0xFF1A1A2E)
 private val AccentBlue = Color(0xFF2196F3)
@@ -120,6 +117,7 @@ fun PlanListScreen(
                 items(uiState.plans, key = { it.planId }) { plan ->
                     PlanCard(
                         plan = plan,
+                        lastDurationSec = uiState.lastDurations[plan.planId],
                         onView = { onPlanView(plan.planId) },
                         onStart = { onPlanClick(plan.planId) },
                         onDelete = { viewModel.deletePlan(plan) },
@@ -138,14 +136,13 @@ fun PlanListScreen(
 @Composable
 private fun PlanCard(
     plan: WorkoutPlan,
+    lastDurationSec: Int?,
     onView: () -> Unit,
     onStart: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val dateFormat = rememberDateFormat()
-
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().pressEffect(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = WhiteColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -153,7 +150,7 @@ private fun PlanCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // 左侧彩色图标
@@ -174,10 +171,10 @@ private fun PlanCard(
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            // 计划名称和日期
+            // 计划名称和上次训练时长
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    plan.name,
+                    if (plan.name.length > 10) plan.name.take(10) + "…" else plan.name,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = DarkBg,
@@ -185,11 +182,15 @@ private fun PlanCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    dateFormat.format(Date(plan.createdDate)),
-                    fontSize = 13.sp,
-                    color = MediumGray,
-                )
+                if (lastDurationSec != null && lastDurationSec > 0) {
+                    Text(
+                        "上次训练 ${formatDurationBrief(lastDurationSec)}",
+                        fontSize = 12.sp,
+                        color = MediumGray,
+                    )
+                } else {
+                    Text("还未训练", fontSize = 12.sp, color = MediumGray)
+                }
             }
 
             // 开始训练按钮
@@ -208,18 +209,15 @@ private fun PlanCard(
             TextButton(onClick = onView) {
                 Text(LocaleStrings.viewPlan, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AccentBlue)
             }
-
-            // 删除
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Filled.Delete,
-                    contentDescription = "删除",
-                    tint = OrangeColor,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
         }
     }
+}
+
+private fun formatDurationBrief(totalSeconds: Int): String {
+    if (totalSeconds <= 0) return "0m"
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    return if (hours > 0) "${hours}h${minutes}m" else "${minutes}m"
 }
 
 @Composable
@@ -265,9 +263,3 @@ private fun AddPlanCard(onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun rememberDateFormat(): SimpleDateFormat {
-    return androidx.compose.runtime.remember {
-        SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
-    }
-}
