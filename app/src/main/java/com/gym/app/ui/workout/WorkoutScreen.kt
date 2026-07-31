@@ -268,7 +268,7 @@ fun WorkoutScreen(
                     onHome = {
                         onComplete(uiState.savedSessionId!!)
                     },
-                    showHomeButton = false,
+                    showHomeButton = true,
             )
             }
         } // if sheetContentVisible

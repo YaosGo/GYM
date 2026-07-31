@@ -55,7 +55,7 @@ import com.gym.app.data.repository.WorkoutRepository
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.pressEffect
 import com.gym.app.ui.components.ProgressResult
-import com.gym.app.ui.components.TrendChartCard
+import com.gym.app.ui.components.ExerciseTrendCard
 import com.gym.app.ui.components.displayName
 import com.gym.app.ui.components.TrendPoint
 import com.gym.app.ui.components.calculateProgress
@@ -103,17 +103,19 @@ fun SessionDetailScreen(
                 if (ex != null) names[r.exerciseId] = ex.displayName
             }
 
-            // 查询历史趋势数据
+            // 查询历史趋势数据（仅包含当前 session 及之前的训练）
             val histories = mutableMapOf<String, List<TrendPoint>>()
             records.forEach { record ->
                 val allRecords = workoutRepository.getRecordsForExerciseHistory(planId, record.exerciseId)
-                // 按 session 关联获取日期
-                val dates = allRecords.map { r ->
-                    val s = workoutRepository.getSessionById(r.sessionId)
-                    s?.date ?: "—"
+                // 过滤：仅保留当前 session 及之前创建的记录（按 sessionId 自增序）
+                val filtered = allRecords.filter { it.sessionId <= sessionId }
+                // 确保当前记录在列表中
+                val mergedRecords = if (filtered.none { it.sessionId == sessionId }) filtered + record else filtered
+                val dates = mergedRecords.map { r ->
+                    if (r.sessionId == sessionId) session.date
+                    else workoutRepository.getSessionById(r.sessionId)?.date ?: "—"
                 }
-                val points = extractTrendPoints(allRecords, dates)
-                histories[record.exerciseId] = points
+                histories[record.exerciseId] = extractTrendPoints(mergedRecords, dates)
             }
 
             // 查询上次训练记录用于进步对比
@@ -247,15 +249,14 @@ fun SessionDetailScreen(
                     val name = d.exerciseNames[record.exerciseId] ?: record.exerciseId
                     val trendPoints = d.exerciseHistories[record.exerciseId] ?: emptyList()
                     val progress = d.progressMap[record.exerciseId]
+                    val lastPt = trendPoints.lastOrNull()
 
-                    // 当前数据点
-                    val currentPoint = if (trendPoints.isNotEmpty()) trendPoints.last() else null
-
-                    TrendChartCard(
+                    ExerciseTrendCard(
                         exerciseName = "${index + 1}. $name",
                         trendPoints = trendPoints,
-                        currentPoint = currentPoint,
-                        progressResult = progress,
+                        currentVolume = lastPt?.totalVolume ?: 0f,
+                        currentSets = lastPt?.sets ?: record.actualSets,
+                        currentReps = lastPt?.maxReps ?: 0,
                     )
                 }
 
@@ -290,11 +291,19 @@ fun SessionDetailScreenContent(
                 val ex = exerciseRepository.getExerciseById(r.exerciseId)
                 if (ex != null) names[r.exerciseId] = ex.displayName
             }
+            // 查询历史趋势数据（仅包含当前 session 及之前的训练）
             val histories = mutableMapOf<String, List<TrendPoint>>()
             records.forEach { record ->
                 val allRecords = workoutRepository.getRecordsForExerciseHistory(planId, record.exerciseId)
-                val dates = allRecords.map { r -> workoutRepository.getSessionById(r.sessionId)?.date ?: "—" }
-                histories[record.exerciseId] = extractTrendPoints(allRecords, dates)
+                // 过滤：仅保留当前 session 及之前创建的记录（按 sessionId 自增序）
+                val filtered = allRecords.filter { it.sessionId <= sessionId }
+                // 确保当前记录在列表中
+                val mergedRecords = if (filtered.none { it.sessionId == sessionId }) filtered + record else filtered
+                val dates = mergedRecords.map { r ->
+                    if (r.sessionId == sessionId) session.date
+                    else workoutRepository.getSessionById(r.sessionId)?.date ?: "—"
+                }
+                histories[record.exerciseId] = extractTrendPoints(mergedRecords, dates)
             }
             val previousSession = workoutRepository.getLatestSession(planId)
             val previousRecords = if (previousSession != null && previousSession.sessionId != sessionId) {
@@ -342,13 +351,13 @@ fun SessionDetailScreenContent(
             d.records.forEachIndexed { idx, record ->
                 val name = d.exerciseNames[record.exerciseId] ?: record.exerciseId
                 val trendPoints = d.exerciseHistories[record.exerciseId] ?: emptyList()
-                val progress = d.progressMap[record.exerciseId]
-                val currentPoint = if (trendPoints.isNotEmpty()) trendPoints.last() else null
-                TrendChartCard(
+                val lastPt = trendPoints.lastOrNull()
+                ExerciseTrendCard(
                     exerciseName = "${idx + 1}. $name",
                     trendPoints = trendPoints,
-                    currentPoint = currentPoint,
-                    progressResult = progress,
+                    currentVolume = lastPt?.totalVolume ?: 0f,
+                    currentSets = lastPt?.sets ?: record.actualSets,
+                    currentReps = lastPt?.maxReps ?: 0,
                 )
             }
             // 返回按钮（仅非 Sheet 模式显示）
@@ -361,6 +370,10 @@ fun SessionDetailScreenContent(
                 ) {
                     Text(LocaleStrings.returnHome, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
+            }
+        } else {
+            Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                Text("加载失败", color = MediumGray, fontSize = 14.sp)
             }
         }
     }

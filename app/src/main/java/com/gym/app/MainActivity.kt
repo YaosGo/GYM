@@ -1,7 +1,9 @@
 package com.gym.app
 
 import android.os.Bundle
+import android.app.Activity
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -42,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -107,6 +110,7 @@ private fun MainScreen(
 ) {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // 收集设置
     val weightUnit by settings.weightUnit.collectAsState(initial = "kg")
@@ -124,6 +128,11 @@ private fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val isMainTab = bottomTabs.any { it.route == currentRoute }
+
+    // 主 Tab 页面按返回键 → 退出 App
+    BackHandler(enabled = isMainTab) {
+        (context as? Activity)?.finish()
+    }
 
     // 共享状态：面板显示时通知导航栏收起
     val sheetShowing = remember { mutableStateOf(false) }
@@ -324,9 +333,8 @@ private fun MainScreen(
                 onTabSelected = { route ->
                     selectedTab = route
                     navController.navigate(route) {
-                        popUpTo(NavRoutes.PLAN_LIST) { saveState = true }
+                        popUpTo(0) { inclusive = true }
                         launchSingleTop = true
-                        restoreState = true
                     }
                 },
                 onSettingsClick = { navController.navigate(NavRoutes.SETTINGS) },

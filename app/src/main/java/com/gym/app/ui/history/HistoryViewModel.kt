@@ -38,29 +38,39 @@ class HistoryViewModel(
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
     init {
+        val today = dateFormat.format(Date())
         _uiState.value = _uiState.value.copy(
             currentYear = cal.get(Calendar.YEAR),
             currentMonth = cal.get(Calendar.MONTH),
+            selectedDate = today,
         )
-        loadData()
+        viewModelScope.launch {
+            loadMonthData()
+            loadSessionsForDate(today)
+            _uiState.value = _uiState.value.copy(isLoading = false)
+        }
+    }
+
+    private suspend fun loadMonthData() {
+        val state = _uiState.value
+        val yearMonth = "${state.currentYear}-${(state.currentMonth + 1).toString().padStart(2, '0')}"
+
+        val total = workoutRepository.getTotalWorkoutCount()
+        val monthly = workoutRepository.getMonthlyWorkoutCount(yearMonth)
+        val dates = workoutRepository.getWorkoutDatesByMonth(yearMonth)
+        val counts = dates.groupingBy { it }.eachCount()
+
+        _uiState.value = _uiState.value.copy(
+            totalWorkouts = total,
+            monthlyWorkouts = monthly,
+            workoutCounts = counts,
+        )
     }
 
     private fun loadData() {
         viewModelScope.launch {
-            val state = _uiState.value
-            val yearMonth = "${state.currentYear}-${(state.currentMonth + 1).toString().padStart(2, '0')}"
-
-            val total = workoutRepository.getTotalWorkoutCount()
-            val monthly = workoutRepository.getMonthlyWorkoutCount(yearMonth)
-            val dates = workoutRepository.getWorkoutDatesByMonth(yearMonth)
-            val counts = dates.groupingBy { it }.eachCount()
-
-            _uiState.value = state.copy(
-                totalWorkouts = total,
-                monthlyWorkouts = monthly,
-                workoutCounts = counts,
-                isLoading = false,
-            )
+            loadMonthData()
+            _uiState.value = _uiState.value.copy(isLoading = false)
         }
     }
 
@@ -97,23 +107,27 @@ class HistoryViewModel(
     fun selectDate(date: String) {
         val state = _uiState.value
         if (state.selectedDate == date) {
-            // 取消选择
             _uiState.value = state.copy(selectedDate = null, selectedDateSessions = emptyList())
         } else {
-            _uiState.value = state.copy(selectedDate = date)
+            _uiState.value = state.copy(selectedDate = date, isLoading = true)
             viewModelScope.launch {
-                val sessions = workoutRepository.getSessionsByDate(date)
-                val names = mutableMapOf<Long, String>()
-                sessions.forEach { s ->
-                    val plan = workoutRepository.getPlanById(s.planId)
-                    names[s.planId] = plan?.name ?: "训练"
-                }
-                _uiState.value = _uiState.value.copy(
-                    selectedDateSessions = sessions,
-                    planNames = names,
-                )
+                loadSessionsForDate(date)
+                _uiState.value = _uiState.value.copy(isLoading = false)
             }
         }
+    }
+
+    private suspend fun loadSessionsForDate(date: String) {
+        val sessions = workoutRepository.getSessionsByDate(date)
+        val names = mutableMapOf<Long, String>()
+        sessions.forEach { s ->
+            val plan = workoutRepository.getPlanById(s.planId)
+            names[s.planId] = plan?.name ?: "训练"
+        }
+        _uiState.value = _uiState.value.copy(
+            selectedDateSessions = sessions,
+            planNames = names,
+        )
     }
 
     class Factory(

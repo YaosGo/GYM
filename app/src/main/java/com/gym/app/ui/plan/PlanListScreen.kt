@@ -117,7 +117,6 @@ fun PlanListScreen(
                 items(uiState.plans, key = { it.planId }) { plan ->
                     PlanCard(
                         plan = plan,
-                        lastDurationSec = uiState.lastDurations[plan.planId],
                         onView = { onPlanView(plan.planId) },
                         onStart = { onPlanClick(plan.planId) },
                         onDelete = { viewModel.deletePlan(plan) },
@@ -136,7 +135,6 @@ fun PlanListScreen(
 @Composable
 private fun PlanCard(
     plan: WorkoutPlan,
-    lastDurationSec: Int?,
     onView: () -> Unit,
     onStart: () -> Unit,
     onDelete: () -> Unit,
@@ -171,7 +169,7 @@ private fun PlanCard(
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            // 计划名称和上次训练时长
+            // 计划名称（居中、靠左）
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     if (plan.name.length > 10) plan.name.take(10) + "…" else plan.name,
@@ -181,16 +179,6 @@ private fun PlanCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                if (lastDurationSec != null && lastDurationSec > 0) {
-                    Text(
-                        "上次训练 ${formatDurationBrief(lastDurationSec)}",
-                        fontSize = 12.sp,
-                        color = MediumGray,
-                    )
-                } else {
-                    Text("还未训练", fontSize = 12.sp, color = MediumGray)
-                }
             }
 
             // 开始训练按钮
@@ -211,13 +199,6 @@ private fun PlanCard(
             }
         }
     }
-}
-
-private fun formatDurationBrief(totalSeconds: Int): String {
-    if (totalSeconds <= 0) return "0m"
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    return if (hours > 0) "${hours}h${minutes}m" else "${minutes}m"
 }
 
 @Composable

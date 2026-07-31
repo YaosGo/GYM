@@ -212,6 +212,7 @@ fun HistoryScreen(
                     workoutRepository = workoutRepository,
                     exerciseRepository = exerciseRepository,
                     onHome = { selectedSessionId.value = null },
+                    showHomeButton = false,
                 )
             }
         }
@@ -262,6 +263,8 @@ private fun SessionCard(session: WorkoutSession, planName: String, onClick: () -
         val parsed = sdf.parse(session.date)
         if (parsed != null) java.text.SimpleDateFormat("MM/dd", java.util.Locale.getDefault()).format(parsed) else session.date
     } catch (_: Exception) { session.date }
+    val timeStr = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(session.completedAt))
 
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
@@ -276,7 +279,11 @@ private fun SessionCard(session: WorkoutSession, planName: String, onClick: () -
             Box(Modifier.width(4.dp).height(44.dp).clip(RoundedCornerShape(2.dp)).background(AccentBlue))
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(dateStr, fontSize = 12.sp, color = MediumGray)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(dateStr, fontSize = 12.sp, color = MediumGray)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(timeStr, fontSize = 12.sp, color = MediumGray)
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     planName,

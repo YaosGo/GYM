@@ -11,6 +11,7 @@ data class TrendPoint(
     val maxWeight: Float,
     val maxReps: Int,
     val totalVolume: Float, // Σ(weight × reps)
+    val sets: Int = 0,      // 总组数
 )
 
 /** 进步/退步对比结果 */
@@ -50,12 +51,14 @@ fun extractTrendPoints(records: List<ExerciseRecord>, dates: List<String>): List
         val maxWeight = weightList.maxOrNull() ?: 0f
         val maxReps = repsList.maxOrNull() ?: 0
         val totalVolume = repsList.zip(weightList).sumOf { (r, w) -> (r * w).toDouble() }.toFloat()
+        val sets = record.actualSets
 
         TrendPoint(
             date = dates.getOrElse(index) { record.sessionId.toString() },
             maxWeight = maxWeight,
             maxReps = maxReps,
             totalVolume = totalVolume,
+            sets = sets,
         )
     }
 }

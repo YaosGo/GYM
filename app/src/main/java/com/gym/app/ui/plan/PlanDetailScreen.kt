@@ -69,11 +69,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.gym.app.data.entity.Exercise
+import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
 import com.gym.app.ui.components.pressEffect
+import com.gym.app.ui.components.PlanTrendCard
 import com.gym.app.ui.components.TrendPoint
 import com.gym.app.ui.exercise.ExerciseListViewModel
+import coil.compose.AsyncImage
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -97,6 +106,9 @@ fun PlanDetailScreen(
 
     // 查看/编辑模式
     var isEditing by remember { mutableStateOf(false) }
+
+    // 动作详情面板
+    var selectedDetailExercise by remember { mutableStateOf<Exercise?>(null) }
 
     // 保存成功弹窗
     var showSavedSheet by remember { mutableStateOf(false) }
@@ -144,6 +156,7 @@ fun PlanDetailScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -247,6 +260,7 @@ fun PlanDetailScreen(
                         onMoveDown = {
                             if (index < uiState.exercises.lastIndex) viewModel.moveItem(index, index + 1)
                         },
+                        onExerciseClick = { selectedDetailExercise = it },
                     )
                 }
 
@@ -308,8 +322,8 @@ fun PlanDetailScreen(
                 if (!isEditing) {
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
-                        if (uiState.trendPoints.size >= 2) {
-                            PlanTrendSection(trendPoints = uiState.trendPoints)
+                        if (uiState.trendPoints.isNotEmpty()) {
+                            PlanTrendCard(trendPoints = uiState.trendPoints)
                         } else {
                             Box(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -327,7 +341,18 @@ fun PlanDetailScreen(
                 }
             }
         }
-    }
+    } // Scaffold 结束
+
+        // 动作详情面板
+        if (selectedDetailExercise != null) {
+            FrostedBottomSheet(
+                visible = true,
+                onDismiss = { selectedDetailExercise = null },
+            ) {
+                ExerciseDetailSheetContent(exercise = selectedDetailExercise!!)
+            }
+        }
+    } // Box 结束
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -345,9 +370,15 @@ private fun ExerciseItemCard(
     onRepsChanged: (Int) -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
+    onExerciseClick: (Exercise) -> Unit = {},
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().pressEffect(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressEffect()
+            .clickable(enabled = !isEditing && item.exercise != null) {
+                item.exercise?.let { onExerciseClick(it) }
+            },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = WhiteColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -501,177 +532,6 @@ private fun SearchAddItem(exercise: Exercise, isAdded: Boolean, onAdd: () -> Uni
     }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// 计划级别趋势图（汇总所有动作的总训练量）
-// ═══════════════════════════════════════════════════════════════
-
-@Composable
-private fun PlanTrendSection(trendPoints: List<TrendPoint>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = WhiteColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(
-                "训练成果趋势",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = DarkBg,
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // 百分比变化标签行
-            if (trendPoints.size >= 2) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    for (i in 1 until trendPoints.size) {
-                        val prev = trendPoints[i - 1]
-                        val curr = trendPoints[i]
-                        val change = if (prev.totalVolume > 0) {
-                            ((curr.totalVolume - prev.totalVolume) / prev.totalVolume * 100f).toInt()
-                        } else 0
-                        val (symbol, color) = when {
-                            change > 0 -> "↑" to AccentGreen
-                            change < 0 -> "↓" to OrangeColor
-                            else -> "→" to MediumGray
-                        }
-                        val shortDate = trendPoints[i].date.takeLast(5) // MM-DD
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(color.copy(alpha = 0.1f))
-                                .padding(horizontal = 6.dp, vertical = 3.dp),
-                        ) {
-                            Text(
-                                "$shortDate $symbol${kotlin.math.abs(change)}%",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = color,
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // 折线图
-            PlanTotalVolumeChart(
-                points = trendPoints,
-                modifier = Modifier.fillMaxWidth().height(160.dp),
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // 图例
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(AccentBlue)
-                        .size(8.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("总训练量 (kg)", fontSize = 11.sp, color = MediumGray)
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlanTotalVolumeChart(
-    points: List<TrendPoint>,
-    modifier: Modifier = Modifier,
-) {
-    val lineColor = AccentBlue
-    val gridColor = Color(0xFFE0E0E0)
-
-    Canvas(modifier = modifier) {
-        if (points.size < 2) return@Canvas
-
-        val values = points.map { it.totalVolume.toFloat() }
-        val minVal = values.min()
-        val maxVal = values.max()
-        val range = if (maxVal == minVal) 1f else maxVal - minVal
-
-        val paddingLeft = 44f
-        val paddingRight = 16f
-        val paddingTop = 12f
-        val paddingBottom = 28f
-
-        val chartWidth = size.width - paddingLeft - paddingRight
-        val chartHeight = size.height - paddingTop - paddingBottom
-
-        // 数据点
-        val pointOffsets = values.mapIndexed { index, value ->
-            val x = paddingLeft + (index.toFloat() / (values.size - 1)) * chartWidth
-            val y = paddingTop + (1f - (value - minVal) / range) * chartHeight
-            Offset(x, y)
-        }
-
-        // 网格 + Y轴标签
-        val gridLines = 3
-        for (i in 0..gridLines) {
-            val fraction = i.toFloat() / gridLines
-            val y = paddingTop + (1f - fraction) * chartHeight
-            val labelValue = minVal + fraction * range
-            drawLine(gridColor, Offset(paddingLeft, y), Offset(size.width - paddingRight, y), 1f)
-            drawContext.canvas.nativeCanvas.drawText(
-                labelValue.toInt().toString(), 4f, y + 4f,
-                android.graphics.Paint().apply { color = 0xFF9E9E9E.toInt(); textSize = 22f; isAntiAlias = true },
-            )
-        }
-
-        // 面积填充（半透明）
-        if (pointOffsets.size >= 2) {
-            val areaPath = Path().apply {
-                moveTo(pointOffsets.first().x, pointOffsets.first().y)
-                for (i in 1 until pointOffsets.size) {
-                    lineTo(pointOffsets[i].x, pointOffsets[i].y)
-                }
-                // 闭合到底部
-                lineTo(pointOffsets.last().x, paddingTop + chartHeight)
-                lineTo(pointOffsets.first().x, paddingTop + chartHeight)
-                close()
-            }
-            drawPath(areaPath, lineColor.copy(alpha = 0.1f))
-        }
-
-        // 折线
-        if (pointOffsets.size >= 2) {
-            val linePath = Path().apply {
-                moveTo(pointOffsets.first().x, pointOffsets.first().y)
-                for (i in 1 until pointOffsets.size) {
-                    lineTo(pointOffsets[i].x, pointOffsets[i].y)
-                }
-            }
-            drawPath(linePath, lineColor, style = Stroke(width = 3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-
-        // 数据点 + 标签
-        for ((i, offset) in pointOffsets.withIndex()) {
-            drawCircle(lineColor, 5f, offset)
-            drawCircle(Color.White, 3f, offset)
-
-            // X轴日期标签
-            if (points.size <= 12 || i % (points.size / 6).coerceAtLeast(1) == 0 || i == points.lastIndex) {
-                val dateLabel = points[i].date.takeLast(5)
-                drawContext.canvas.nativeCanvas.drawText(
-                    dateLabel, offset.x - 16f, size.height - 4f,
-                    android.graphics.Paint().apply { color = 0xFF9E9E9E.toInt(); textSize = 20f; isAntiAlias = true },
-                )
-            }
-        }
-    }
-}
-
 private fun formatFullDuration(totalSeconds: Int): String {
     if (totalSeconds == 0) return "0s"
     val hours = totalSeconds / 3600
@@ -680,4 +540,91 @@ private fun formatFullDuration(totalSeconds: Int): String {
         if (hours > 0) append("${hours}h")
         if (minutes > 0 || hours == 0) append("${minutes}m")
     }.trim()
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 动作详情 Sheet 内容
+// ═══════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExerciseDetailSheetContent(exercise: Exercise) {
+    val steps = remember(exercise) {
+        try {
+            val moshi = com.squareup.moshi.Moshi.Builder()
+                .addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
+            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java)
+            val json = exercise.instructionStepsZh
+            if (json.isBlank() || json == "[]") emptyList()
+            else moshi.adapter<List<String>>(type).fromJson(json) ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f).background(Color.Black),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = "file:///android_asset/${exercise.gifPath}",
+                contentDescription = exercise.displayName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+            )
+            Box(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.5f)).padding(16.dp),
+            ) {
+                Column {
+                    Text(exercise.displayName, color = WhiteColor, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(exercise.name, color = WhiteColor.copy(alpha = 0.6f), fontSize = 13.sp)
+                }
+            }
+        }
+        Column(modifier = Modifier.fillMaxWidth().background(WhiteColor).padding(16.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TagChip(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), AccentBlue)
+                TagChip(ExerciseListViewModel.targetLabel(exercise.target), OrangeColor)
+                TagChip(ExerciseListViewModel.equipmentLabel(exercise.equipment), Color(0xFF26A69A))
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Text("步骤指导", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg)
+            Spacer(modifier = Modifier.height(16.dp))
+            if (steps.isNotEmpty()) {
+                steps.forEachIndexed { index, step ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Box(
+                            modifier = Modifier.size(24.dp).clip(CircleShape).background(DarkBg),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("${index + 1}", color = WhiteColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(step.trim(), fontSize = 14.sp, color = DarkBg, lineHeight = 22.sp, modifier = Modifier.weight(1f))
+                    }
+                }
+            } else {
+                Text(exercise.instructionsZh, color = DarkBg, lineHeight = 24.sp)
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun TagChip(text: String, color: Color) {
+    Box(
+        modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = color)
+    }
 }
