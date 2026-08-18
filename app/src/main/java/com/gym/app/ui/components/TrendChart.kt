@@ -3,7 +3,14 @@ package com.gym.app.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -107,6 +114,13 @@ fun ExerciseTrendCard(
                 if (sel != null) {
                     Text(sel.date, fontSize = 11.sp, color = MediumGray)
                 }
+            } else if (points.size == 1) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    "完成 2 次以上训练后显示趋势图",
+                    fontSize = 12.sp,
+                    color = MediumGray,
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -150,6 +164,12 @@ private fun MultiLineChart(
     val valuesSets = points.map { it.sets.toFloat() }
     val valuesReps = points.map { it.maxReps.toFloat() }
 
+    val animProgress = remember { Animatable(0f) }
+    LaunchedEffect(points) {
+        animProgress.snapTo(0f)
+        animProgress.animateTo(1f, animationSpec = tween(600, easing = FastOutSlowInEasing))
+    }
+
     Canvas(
         modifier = modifier.pointerInput(points) {
             detectTapGestures { tapOffset ->
@@ -184,7 +204,7 @@ private fun MultiLineChart(
         val padL = 40f; val padR = 16f; val padT = 12f; val padB = 24f
         val cw = size.width - padL - padR; val ch = size.height - padT - padB
 
-        // grid
+        // 1. Grid
         for (i in 0..3) {
             val frac = i / 3f; val y = padT + (1f - frac) * ch
             drawLine(gridColor, Offset(padL, y), Offset(size.width - padR, y), 1f)
@@ -202,30 +222,60 @@ private fun MultiLineChart(
                 val y = padT + (1f - (v - minV) / range) * ch
                 if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
-            // 粗线
             drawPath(path, color, style = Stroke(4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-            // 折点
             values.forEachIndexed { i, v ->
                 val x = padL + (i.toFloat() / (values.size - 1)) * cw
                 val y = padT + (1f - (v - minV) / range) * ch
                 val isLast = i == values.lastIndex
                 val isSel = i == selectedIndex
-                // 选中光晕
                 if (isSel) drawCircle(color.copy(alpha = 0.25f), if (isLast) 16f else 12f, Offset(x, y))
-                // 外圈
                 drawCircle(color.copy(alpha = 0.35f), if (isLast) 11f else 8f, Offset(x, y))
-                // 实心
                 drawCircle(color, if (isLast) 8f else if (isSel) 6f else 5f, Offset(x, y))
-                // 白芯
                 drawCircle(Color.White, if (isLast) 5f else 3f, Offset(x, y))
             }
         }
 
+        // 2. Lines + dots with reveal animation (clip from left)
+        val clipX = padL + animProgress.value * cw
+        drawContext.canvas.save()
+        drawContext.canvas.clipRect(0f, 0f, clipX, size.height)
         if (showVolume) drawLineV(valuesVol, LineVolume)
         if (showSets) drawLineV(valuesSets, LineSets)
         if (showReps) drawLineV(valuesReps, LineReps)
+        drawContext.canvas.restore()
 
-        // X axis
+        // 3. Crosshair — dashed horizontal line at selected volume
+        if (showVolume && selectedIndex in valuesVol.indices) {
+            val selX = padL + (selectedIndex.toFloat() / (points.size - 1).coerceAtLeast(1)) * cw
+            val selY = padT + (1f - (valuesVol[selectedIndex] - minV) / range) * ch
+            val dashPath = Path().apply {
+                moveTo(padL, selY)
+                lineTo(selX - 6f, selY)
+            }
+            drawPath(
+                dashPath,
+                LineVolume.copy(alpha = 0.45f),
+                style = Stroke(width = 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f)))
+            )
+        }
+
+        // 4. Tooltip bubble above selected point
+        if (showVolume && selectedIndex in valuesVol.indices) {
+            val selX = padL + (selectedIndex.toFloat() / (points.size - 1).coerceAtLeast(1)) * cw
+            val selY = padT + (1f - (valuesVol[selectedIndex] - minV) / range) * ch
+            val tooltipText = formatVolume(valuesVol[selectedIndex])
+            val textPaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.WHITE; textSize = 24f; isAntiAlias = true; isFakeBoldText = true
+            }
+            val textW = textPaint.measureText(tooltipText)
+            val bw = textW + 18f; val bh = 26f
+            val bx = (selX - bw / 2).coerceIn(padL, size.width - padR - bw)
+            val by = (selY - bh - 10f).coerceAtLeast(padT)
+            drawRoundRect(LineVolume, Offset(bx, by), Size(bw, bh), CornerRadius(6f, 6f))
+            drawContext.canvas.nativeCanvas.drawText(tooltipText, bx + 9f, by + 19f, textPaint)
+        }
+
+        // 5. X axis labels
         points.forEachIndexed { i, p ->
             if (points.size <= 6 || i % 2 == 0 || i == points.lastIndex) {
                 val x = padL + (i.toFloat() / (points.size - 1).coerceAtLeast(1)) * cw
@@ -254,6 +304,12 @@ fun PlanTrendCard(trendPoints: List<TrendPoint>) {
         if (prev > 0) ((curr - prev) / prev * 100f).toInt() else 0
     } else 0
 
+    val animProgress = remember { Animatable(0f) }
+    LaunchedEffect(points) {
+        animProgress.snapTo(0f)
+        animProgress.animateTo(1f, animationSpec = tween(600, easing = FastOutSlowInEasing))
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -277,10 +333,8 @@ fun PlanTrendCard(trendPoints: List<TrendPoint>) {
                 )
             }
 
-            if (points.isNotEmpty()) {
+            if (points.size >= 2) {
                 Spacer(modifier = Modifier.height(8.dp))
-                var tapInfo by remember { mutableStateOf("") }
-                // 可点击的 Canvas
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -303,8 +357,11 @@ fun PlanTrendCard(trendPoints: List<TrendPoint>) {
                             }
                         }
                 ) {
-                    drawPlanLine(points, selectedIndex)
+                    drawPlanLine(points, selectedIndex, animProgress.value)
                 }
+            } else if (points.size == 1) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text("完成 2 次以上训练后显示趋势图", fontSize = 12.sp, color = MediumGray)
             } else {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("暂无训练数据", fontSize = 12.sp, color = MediumGray)
@@ -320,6 +377,7 @@ fun PlanTrendCard(trendPoints: List<TrendPoint>) {
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlanLine(
     points: List<TrendPoint>,
     selectedIndex: Int,
+    animProgress: Float = 1f,
 ) {
     if (points.isEmpty()) return
     val lineColor = AccentBlue
@@ -332,7 +390,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlanLine(
     val padL = 44f; val padR = 16f; val padT = 12f; val padB = 28f
     val cw = size.width - padL - padR; val ch = size.height - padT - padB
 
-    // grid
+    // 1. Grid
     for (i in 0..3) {
         val frac = i / 3f; val y = padT + (1f - frac) * ch
         drawLine(gridColor, Offset(padL, y), Offset(size.width - padR, y), 1f)
@@ -342,46 +400,78 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlanLine(
         )
     }
 
+    // 2. Area fill + line + points with reveal animation
+    val clipX = padL + animProgress * cw
+    drawContext.canvas.save()
+    drawContext.canvas.clipRect(0f, 0f, clipX, size.height)
     // area fill
-    val areaPath = Path().apply {
-        moveTo(padL, padT + ch)
+        val areaPath = Path().apply {
+            moveTo(padL, padT + ch)
+            values.forEachIndexed { i, v ->
+                val x = padL + (i.toFloat() / (values.size - 1).coerceAtLeast(1)) * cw
+                lineTo(x, padT + (1f - (v - minV) / range) * ch)
+            }
+            lineTo(padL + cw, padT + ch); close()
+        }
+        drawPath(areaPath, lineColor.copy(alpha = 0.08f))
+
+        // line
+        if (values.size >= 2) {
+            val lp = Path().apply {
+                values.forEachIndexed { i, v ->
+                    val x = padL + (i.toFloat() / (values.size - 1)) * cw
+                    if (i == 0) moveTo(x, padT + (1f - (v - minV) / range) * ch)
+                    else lineTo(x, padT + (1f - (v - minV) / range) * ch)
+                }
+            }
+            drawPath(lp, lineColor, style = Stroke(3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+
+        // points
         values.forEachIndexed { i, v ->
             val x = padL + (i.toFloat() / (values.size - 1).coerceAtLeast(1)) * cw
-            lineTo(x, padT + (1f - (v - minV) / range) * ch)
+            val y = padT + (1f - (v - minV) / range) * ch
+            val isLast = i == values.lastIndex
+            val isSel = i == selectedIndex
+            if (isSel) drawCircle(lineColor.copy(alpha = 0.25f), if (isLast) 18f else 14f, Offset(x, y))
+            drawCircle(lineColor.copy(alpha = 0.35f), if (isLast) 12f else 8f, Offset(x, y))
+            drawCircle(lineColor, if (isLast) 8f else if (isSel) 6f else 5f, Offset(x, y))
+            drawCircle(Color.White, if (isLast) 5f else 3f, Offset(x, y))
         }
-        lineTo(padL + cw, padT + ch); close()
-    }
-    drawPath(areaPath, lineColor.copy(alpha = 0.08f))
+    drawContext.canvas.restore()
 
-    // line
-    if (values.size >= 2) {
-        val lp = Path().apply {
-            values.forEachIndexed { i, v ->
-                val x = padL + (i.toFloat() / (values.size - 1)) * cw
-                if (i == 0) moveTo(x, padT + (1f - (v - minV) / range) * ch)
-                else lineTo(x, padT + (1f - (v - minV) / range) * ch)
-            }
+    // 3. Crosshair — dashed horizontal line at selected value
+    if (selectedIndex in values.indices) {
+        val selX = padL + (selectedIndex.toFloat() / (values.size - 1).coerceAtLeast(1)) * cw
+        val selY = padT + (1f - (values[selectedIndex] - minV) / range) * ch
+        val dashPath = Path().apply {
+            moveTo(padL, selY)
+            lineTo(selX - 6f, selY)
         }
-        drawPath(lp, lineColor, style = Stroke(3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawPath(
+            dashPath,
+            lineColor.copy(alpha = 0.45f),
+            style = Stroke(width = 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f)))
+        )
     }
 
-    // points — 最后一个最大，选中有光晕
-    values.forEachIndexed { i, v ->
-        val x = padL + (i.toFloat() / (values.size - 1).coerceAtLeast(1)) * cw
-        val y = padT + (1f - (v - minV) / range) * ch
-        val isLast = i == values.lastIndex
-        val isSel = i == selectedIndex
-        // 选中光晕
-        if (isSel) drawCircle(lineColor.copy(alpha = 0.25f), if (isLast) 18f else 14f, Offset(x, y))
-        // 外圈
-        drawCircle(lineColor.copy(alpha = 0.35f), if (isLast) 12f else 8f, Offset(x, y))
-        // 实心
-        drawCircle(lineColor, if (isLast) 8f else if (isSel) 6f else 5f, Offset(x, y))
-        // 白芯
-        drawCircle(Color.White, if (isLast) 5f else 3f, Offset(x, y))
+    // 4. Tooltip bubble above selected point
+    if (selectedIndex in values.indices) {
+        val selX = padL + (selectedIndex.toFloat() / (values.size - 1).coerceAtLeast(1)) * cw
+        val selY = padT + (1f - (values[selectedIndex] - minV) / range) * ch
+        val tooltipText = formatVolume(values[selectedIndex])
+        val textPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE; textSize = 24f; isAntiAlias = true; isFakeBoldText = true
+        }
+        val textW = textPaint.measureText(tooltipText)
+        val bw = textW + 18f; val bh = 26f
+        val bx = (selX - bw / 2).coerceIn(padL, size.width - padR - bw)
+        val by = (selY - bh - 10f).coerceAtLeast(padT)
+        drawRoundRect(lineColor, Offset(bx, by), Size(bw, bh), CornerRadius(6f, 6f))
+        drawContext.canvas.nativeCanvas.drawText(tooltipText, bx + 9f, by + 19f, textPaint)
     }
 
-    // X axis dates
+    // 5. X axis dates
     points.forEachIndexed { i, p ->
         if (points.size <= 6 || i % 2 == 0 || i == points.lastIndex) {
             val x = padL + (i.toFloat() / (points.size - 1).coerceAtLeast(1)) * cw

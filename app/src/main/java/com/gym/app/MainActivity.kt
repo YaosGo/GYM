@@ -61,12 +61,13 @@ import com.gym.app.ui.components.AnimationConfig
 import com.gym.app.ui.components.BottomTab
 import com.gym.app.ui.components.GymBottomNavBar
 import com.gym.app.ui.components.LocaleStrings
-import com.gym.app.ui.exercise.ExerciseDetailScreen
 import com.gym.app.ui.exercise.ExerciseListScreen
 import com.gym.app.ui.exercise.ExerciseListViewModel
 import com.gym.app.ui.history.HistoryScreen
 import com.gym.app.ui.history.HistoryViewModel
 import com.gym.app.ui.history.SessionDetailScreen
+import com.gym.app.ui.importimage.ImportScreen
+import com.gym.app.ui.importimage.ImportViewModel
 import com.gym.app.ui.navigation.NavRoutes
 import com.gym.app.ui.plan.CreatePlanScreen
 import com.gym.app.ui.plan.CreatePlanViewModel
@@ -162,6 +163,7 @@ private fun MainScreen(
                     PlanListScreen(
                         viewModel = planListVM,
                         onCreatePlan = { navController.navigate(NavRoutes.CREATE_PLAN) },
+                        onImportImage = { navController.navigate(NavRoutes.IMPORT_IMAGE) },
                         onPlanClick = { navController.navigate(NavRoutes.workout(it)) },
                         onPlanView = { navController.navigate(NavRoutes.editPlan(it)) },
                     )
@@ -202,6 +204,29 @@ private fun MainScreen(
                             }
                         },
                         onSaved = {
+                            navController.navigate(NavRoutes.PLAN_LIST) {
+                                popUpTo(NavRoutes.PLAN_LIST) { inclusive = true }
+                            }
+                        },
+                    )
+                }
+
+                // === 从图片导入训练记录 ===
+                composable(
+                    route = NavRoutes.IMPORT_IMAGE,
+                    enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeIn(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
+                    exitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeOut(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
+                    popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeIn(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
+                    popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeOut(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
+                ) {
+                    val vm: ImportViewModel = viewModel(
+                        factory = ImportViewModel.Factory(workoutRepository, exerciseRepository)
+                    )
+                    ImportScreen(
+                        viewModel = vm,
+                        weightUnit = weightUnit,
+                        onBack = { navController.popBackStack() },
+                        onDone = {
                             navController.navigate(NavRoutes.PLAN_LIST) {
                                 popUpTo(NavRoutes.PLAN_LIST) { inclusive = true }
                             }
@@ -284,26 +309,8 @@ private fun MainScreen(
                     )
                     ExerciseListScreen(
                         viewModel = vm,
-                        onExerciseClick = { navController.navigate(NavRoutes.exerciseDetail(it)) },
                         exerciseRepository = exerciseRepository,
                         sheetShowing = sheetShowing,
-                    )
-                }
-
-                // === 动作详情 ===
-                composable(
-                    route = NavRoutes.EXERCISE_DETAIL,
-                    arguments = listOf(navArgument("exerciseId") { type = NavType.StringType }),
-                    enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeIn(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
-                    exitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeOut(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
-                    popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeIn(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
-                    popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeOut(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
-                ) { entry ->
-                    val exerciseId = entry.arguments?.getString("exerciseId") ?: return@composable
-                    ExerciseDetailScreen(
-                        exerciseId = exerciseId,
-                        repository = exerciseRepository,
-                        onBack = { navController.popBackStack() },
                     )
                 }
 

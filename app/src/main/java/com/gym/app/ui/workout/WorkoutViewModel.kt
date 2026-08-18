@@ -58,7 +58,8 @@ data class WorkoutUiState(
     val planName: String = "",
     val exercises: List<ExerciseWorkoutState> = emptyList(),
     val elapsedSeconds: Int = 0,
-    val tonsLifted: Float = 0f,
+    val completedTons: Float = 0f,
+    val targetTons: Float = 0f,
     val isRunning: Boolean = false,
     val isPaused: Boolean = false,
     val longPressProgress: Float = 0f, // 0..1, 长按 3 秒进度
@@ -155,11 +156,13 @@ class WorkoutViewModel(
                 if (state.isRunning) {
                     _uiState.value = state.copy(
                         elapsedSeconds = state.elapsedSeconds + 1,
-                        tonsLifted = calculateTonsLifted(state.exercises),
+                        completedTons = calculateCompletedTons(state.exercises),
+                        targetTons = calculateTargetTons(state.exercises),
                     )
                 } else {
                     _uiState.value = state.copy(
-                        tonsLifted = calculateTonsLifted(state.exercises),
+                        completedTons = calculateCompletedTons(state.exercises),
+                        targetTons = calculateTargetTons(state.exercises),
                     )
                 }
             }
@@ -200,15 +203,18 @@ class WorkoutViewModel(
                 durationSeconds = _uiState.value.elapsedSeconds,
             )
 
-            val records = _uiState.value.exercises.map { state ->
-                val repsList = state.actualSets.map { it.reps }
-                val weightList = state.actualSets.map { it.weight }
+            // 仅记录用户实际勾选完成的组；未完成任何组的动作不写入记录
+            val records = _uiState.value.exercises.mapNotNull { state ->
+                val completedSets = state.actualSets.filter { it.completed }
+                if (completedSets.isEmpty()) return@mapNotNull null
+                val repsList = completedSets.map { it.reps }
+                val weightList = completedSets.map { it.weight }
                 ExerciseRecord(
                     sessionId = 0,
                     exerciseId = state.exercise.id,
                     targetSets = state.targetSets,
                     targetReps = state.targetReps,
-                    actualSets = state.actualSets.size,
+                    actualSets = completedSets.size,
                     actualReps = intListAdapter.toJson(repsList),
                     weight = floatListAdapter.toJson(weightList),
                     sortOrder = state.sortOrder,
@@ -250,7 +256,8 @@ class WorkoutViewModel(
         exercises[exerciseIndex] = state.copy(actualSets = newSets)
         _uiState.value = _uiState.value.copy(
             exercises = exercises,
-            tonsLifted = calculateTonsLifted(exercises),
+            completedTons = calculateCompletedTons(exercises),
+            targetTons = calculateTargetTons(exercises),
         )
     }
 
@@ -267,7 +274,8 @@ class WorkoutViewModel(
         )
         _uiState.value = _uiState.value.copy(
             exercises = exercises,
-            tonsLifted = calculateTonsLifted(exercises),
+            completedTons = calculateCompletedTons(exercises),
+            targetTons = calculateTargetTons(exercises),
         )
     }
 
@@ -281,7 +289,8 @@ class WorkoutViewModel(
         )
         _uiState.value = _uiState.value.copy(
             exercises = exercises,
-            tonsLifted = calculateTonsLifted(exercises),
+            completedTons = calculateCompletedTons(exercises),
+            targetTons = calculateTargetTons(exercises),
         )
     }
 
@@ -303,7 +312,8 @@ class WorkoutViewModel(
         exercises[exerciseIndex] = state.copy(actualSets = newSets)
         _uiState.value = _uiState.value.copy(
             exercises = exercises,
-            tonsLifted = calculateTonsLifted(exercises),
+            completedTons = calculateCompletedTons(exercises),
+            targetTons = calculateTargetTons(exercises),
         )
     }
 
@@ -314,7 +324,17 @@ class WorkoutViewModel(
 
     // --- 辅助方法 ---
 
-    private fun calculateTonsLifted(exercises: List<ExerciseWorkoutState>): Float {
+    /** 完成重量：仅统计已勾选完成的组（重量 × 次数）。 */
+    private fun calculateCompletedTons(exercises: List<ExerciseWorkoutState>): Float {
+        return exercises.sumOf { state ->
+            state.actualSets.filter { it.completed }.sumOf { set ->
+                (set.weight.toDouble() * set.reps).toDouble()
+            }
+        }.toFloat()
+    }
+
+    /** 目标重量：统计当前全部组（重量 × 次数），不含完成标记。 */
+    private fun calculateTargetTons(exercises: List<ExerciseWorkoutState>): Float {
         return exercises.sumOf { state ->
             state.actualSets.sumOf { set ->
                 (set.weight.toDouble() * set.reps).toDouble()

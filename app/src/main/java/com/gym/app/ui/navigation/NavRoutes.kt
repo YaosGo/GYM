@@ -5,7 +5,6 @@ package com.gym.app.ui.navigation
  */
 object NavRoutes {
     const val EXERCISE_LIST = "exercise_list"
-    const val EXERCISE_DETAIL = "exercise_detail/{exerciseId}"
     const val PLAN_LIST = "plan_list"
     const val CREATE_PLAN = "create_plan"
     const val EDIT_PLAN = "edit_plan/{planId}"
@@ -15,8 +14,8 @@ object NavRoutes {
     const val HISTORY = "history"
     const val SESSION_DETAIL = "session_detail/{sessionId}"
     const val SETTINGS = "settings"
+    const val IMPORT_IMAGE = "import_image"
 
-    fun exerciseDetail(id: String) = "exercise_detail/$id"
     fun editPlan(planId: Long) = "edit_plan/$planId"
     fun workout(planId: Long) = "workout/$planId"
     fun workoutComplete(sessionId: Long) = "workout_complete/$sessionId"

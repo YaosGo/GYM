@@ -78,6 +78,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import com.gym.app.data.entity.Exercise
+import com.gym.app.data.repository.ExerciseRepository
 import com.gym.app.ui.components.AnimationConfig
 import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
@@ -109,9 +110,8 @@ private val bodyPartColors = mapOf(
 @Composable
 fun ExerciseListScreen(
     viewModel: ExerciseListViewModel,
-    onExerciseClick: (String) -> Unit,
     onBack: (() -> Unit)? = null,
-    exerciseRepository: com.gym.app.data.repository.ExerciseRepository? = null,
+    exerciseRepository: ExerciseRepository,
     sheetShowing: androidx.compose.runtime.MutableState<Boolean> = mutableStateOf(false),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -171,7 +171,7 @@ fun ExerciseListScreen(
         containerColor = LightGray,
     ) { padding ->
         // 加载选中动作的详情
-        if (selectedExerciseId.value != null && exerciseRepository != null) {
+        if (selectedExerciseId.value != null) {
             LaunchedEffect(selectedExerciseId.value) {
                 selectedExercise.value = exerciseRepository.getExerciseById(selectedExerciseId.value!!)
             }
@@ -219,13 +219,7 @@ fun ExerciseListScreen(
                     items(uiState.exercises, key = { it.id }) { exercise ->
                         ExerciseGridCard(
                             exercise = exercise,
-                            onClick = {
-                                if (exerciseRepository != null) {
-                                    selectedExerciseId.value = exercise.id
-                                } else {
-                                    onExerciseClick(exercise.id)
-                                }
-                            },
+                            onClick = { selectedExerciseId.value = exercise.id },
                         )
                     }
 
@@ -234,14 +228,13 @@ fun ExerciseListScreen(
         }
     } // Scaffold 结束
 
-        // 磨砂玻璃底部滑出 — 动作详情
+        // 磨砂玻璃底部滑出 — 动作详情（与训练计划/训练完成一致）
         if (sheetContentVisible && selectedExercise.value != null) {
             FrostedBottomSheet(
                 visible = true,
                 onDismiss = {
                     selectedExerciseId.value = null
                 },
-                sheetHeightFraction = 0.96f,
             ) {
                 ExerciseDetailSheetContent(exercise = selectedExercise.value!!)
             }

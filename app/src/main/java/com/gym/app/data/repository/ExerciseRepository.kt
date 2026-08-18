@@ -2,7 +2,9 @@ package com.gym.app.data.repository
 
 import com.gym.app.data.dao.ExerciseDao
 import com.gym.app.data.entity.Exercise
+import com.gym.app.data.search.ExerciseSearch
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class ExerciseRepository(private val exerciseDao: ExerciseDao) {
 
@@ -18,13 +20,12 @@ class ExerciseRepository(private val exerciseDao: ExerciseDao) {
         exerciseDao.searchExercises(query)
 
     /**
-     * 中文模糊搜索：支持单字匹配和多词组合。
-     * 示例："卧推" → 匹配所有含"卧"和"推"的动作；"哑铃 胸" → 匹配哑铃+胸部动作。
+     * 中文模糊搜索：内存评分排序。
+     * 支持字序颠倒（"哑铃平板卧推"命中"平板哑铃卧推"）、多词组合、英文名。
+     * 结果按匹配度从高到低排序。
      */
-    fun fuzzySearchExercises(query: String): Flow<List<Exercise>> {
-        val sqlQuery = ExerciseDao.buildFuzzySearchQuery(query)
-        return exerciseDao.fuzzySearchExercises(sqlQuery)
-    }
+    fun fuzzySearchExercises(query: String): Flow<List<Exercise>> =
+        exerciseDao.getAllExercises().map { all -> ExerciseSearch.search(all, query) }
 
     suspend fun getExerciseById(id: String): Exercise? = exerciseDao.getExerciseById(id)
 

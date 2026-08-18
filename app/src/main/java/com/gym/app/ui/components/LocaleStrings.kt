@@ -58,7 +58,8 @@ object LocaleStrings {
 
     // 训练
     const val workoutTitle = "训练"
-    const val tonsLifted = "总重量"
+    const val completedWeight = "完成重量"
+    const val targetWeight = "目标重量"
     const val totalWorkout = "训练时长"
     const val trainingPlan = "训练计划"
     const val previous = "上次"
@@ -94,6 +95,25 @@ object LocaleStrings {
     const val trendSame = "持平"
     const val firstTime = "首次训练"
     const val needMoreData = "完成更多训练后显示趋势"
+
+    // 图片导入
+    const val importImageTitle = "从图片导入"
+    const val importSelectImage = "选择截图"
+    const val importChangeImage = "更换图片"
+    const val importEmptyDesc = "选择一张旧训练记录截图，自动识别动作与重量次数，创建计划并导入一次训练记录"
+    const val importRecognizing = "正在识别…"
+    const val importErrorTitle = "识别失败"
+    const val importRetry = "重试"
+    const val importDateLabel = "训练日期"
+    const val importSummary = "识别出 {0} 个动作 · {1} 组"
+    const val importUnmatchedTitle = "未匹配到动作库"
+    const val importUnmatchedHint = "以下条目导入时将跳过，可点击删除"
+    const val importUnmatchedBadge = "未匹配，导入时跳过"
+    const val importButton = "导入训练记录"
+    const val importSaving = "导入中…"
+    const val importRawLines = "识别原文"
+    const val importNoText = "没有识别到任何文字，请换一张更清晰的截图再试"
+    const val importParsedNothing = "识别到文字但未解析出动作，展开「识别原文」查看"
 
     // 设置
     const val settingsTitle = "设置"

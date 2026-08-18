@@ -59,6 +59,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -123,6 +124,11 @@ fun WorkoutScreen(
         }
     }
 
+    // 离开训练页时恢复底部导航栏（覆盖所有退出路径：返回键/完成/放弃训练）
+    DisposableEffect(Unit) {
+        onDispose { sheetShowing.value = false }
+    }
+
     // 退出确认弹窗
     if (showExitDialog) {
         AlertDialog(
@@ -145,9 +151,15 @@ fun WorkoutScreen(
         )
     }
 
-    // 系统返回键拦截：面板显示时关闭面板
-    BackHandler(enabled = sheetContentVisible) {
+    // 关闭完成记录页 → 返回"我的计划"（训练已结束，不再停留在训练页）
+    val exitWorkout = {
         viewModel.dismissCompletionSheet()
+        uiState.savedSessionId?.let { onComplete(it) }
+    }
+
+    // 系统返回键拦截：面板显示时关闭面板并返回"我的计划"
+    BackHandler(enabled = sheetContentVisible) {
+        exitWorkout()
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -187,7 +199,12 @@ fun WorkoutScreen(
         ) {
             // 统计栏
             item {
-                StatsHeader(tonsLifted = uiState.tonsLifted, elapsedSeconds = uiState.elapsedSeconds, weightUnit = weightUnit)
+                StatsHeader(
+                    completedTons = uiState.completedTons,
+                    targetTons = uiState.targetTons,
+                    elapsedSeconds = uiState.elapsedSeconds,
+                    weightUnit = weightUnit,
+                )
             }
 
             // 训练计划标签
@@ -257,17 +274,13 @@ fun WorkoutScreen(
         if (sheetContentVisible && uiState.savedSessionId != null) {
             FrostedBottomSheet(
                 visible = true,
-                onDismiss = {
-                    viewModel.dismissCompletionSheet()
-                },
+                onDismiss = { exitWorkout() },
             ) {
                 SessionDetailScreenContent(
                     sessionId = uiState.savedSessionId!!,
                     workoutRepository = workoutRepository,
                     exerciseRepository = exerciseRepository,
-                    onHome = {
-                        onComplete(uiState.savedSessionId!!)
-                    },
+                    onHome = { exitWorkout() },
                     showHomeButton = true,
             )
             }
@@ -335,7 +348,12 @@ private fun WorkoutBottomBar(
                             awaitPointerEventScope {
                                 while (true) {
                                     val event = awaitPointerEvent()
-                                    isPressing = event.changes.any { it.pressed }
+                                    val pressing = event.changes.any { it.pressed }
+                                    if (!pressing && isPressing) {
+                                        // 未长按满 3 秒松手：进度归零，文字恢复"完成训练"
+                                        viewModel.updateLongPressProgress(0f)
+                                    }
+                                    isPressing = pressing
                                 }
                             }
                         },
@@ -400,12 +418,13 @@ private fun WorkoutBottomBar(
 // === 复用组件 ===
 
 @Composable
-private fun StatsHeader(tonsLifted: Float, elapsedSeconds: Int, weightUnit: String) {
+private fun StatsHeader(completedTons: Float, targetTons: Float, elapsedSeconds: Int, weightUnit: String) {
     Row(
         modifier = Modifier.fillMaxWidth().background(DarkBg).padding(horizontal = 16.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        StatItem(LocaleStrings.tonsLifted, formatTons(tonsLifted), weightUnit)
+        StatItem(LocaleStrings.completedWeight, formatTons(completedTons), weightUnit)
+        StatItem(LocaleStrings.targetWeight, formatTons(targetTons), weightUnit)
         StatItem(LocaleStrings.totalWorkout, formatTimer(elapsedSeconds), "")
     }
 }

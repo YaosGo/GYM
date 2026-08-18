@@ -73,6 +73,9 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-gif:2.6.0")
 
+    // ML Kit 中文 OCR（图片导入训练记录，中文模型随 APK 打包、离线可用）
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+
     // Moshi (JSON parsing)
     implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
     ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1")

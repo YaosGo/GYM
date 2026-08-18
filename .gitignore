@@ -23,3 +23,6 @@ Thumbs.db
 # Keystore
 *.jks
 *.keystore
+
+# CodeGraph index
+.codegraph/

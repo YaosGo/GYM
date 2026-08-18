@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -63,6 +64,7 @@ private val AccentGreen = Color(0xFF4CAF50)
 fun PlanListScreen(
     viewModel: PlanListViewModel,
     onCreatePlan: () -> Unit,
+    onImportImage: () -> Unit,
     onPlanClick: (Long) -> Unit,
     onPlanView: (Long) -> Unit,
 ) {
@@ -127,6 +129,11 @@ fun PlanListScreen(
             // 添加新计划
             item {
                 AddPlanCard(onClick = onCreatePlan)
+            }
+
+            // 从图片导入训练记录
+            item {
+                ImportImageCard(onClick = onImportImage)
             }
         }
     }
@@ -240,6 +247,56 @@ private fun AddPlanCard(onClick: () -> Unit) {
                 fontWeight = FontWeight.Medium,
                 color = AccentBlue,
             )
+        }
+    }
+}
+
+@Composable
+private fun ImportImageCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = WhiteColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(OrangeColor.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.PhotoLibrary,
+                    contentDescription = null,
+                    tint = OrangeColor,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column {
+                Text(
+                    LocaleStrings.importImageTitle,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = DarkBg,
+                )
+                Text(
+                    "识别旧训练截图，导入计划与记录",
+                    fontSize = 12.sp,
+                    color = MediumGray,
+                )
+            }
         }
     }
 }
