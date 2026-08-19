@@ -23,9 +23,12 @@ import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -79,6 +82,19 @@ class ImportViewModel(
 
     private val _uiState = MutableStateFlow(ImportUiState())
     val uiState: StateFlow<ImportUiState> = _uiState.asStateFlow()
+
+    /** 未匹配动作搜索面板的结果：空查询返回全部动作，非空走模糊搜索。 */
+    private val _searchQuery = MutableStateFlow("")
+    val searchResults: StateFlow<List<Exercise>> = _searchQuery
+        .flatMapLatest { query ->
+            if (query.isBlank()) exerciseRepository.getAllExercises()
+            else exerciseRepository.fuzzySearchExercises(query)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun onSearchQueryChanged(query: String) {
+        _searchQuery.value = query
+    }
 
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
     private val intListAdapter = moshi.adapter<List<Int>>(
@@ -151,6 +167,25 @@ class ImportViewModel(
         if (exerciseIndex !in exercises.indices) return
         exercises.removeAt(exerciseIndex)
         _uiState.value = _uiState.value.copy(exercises = exercises)
+    }
+
+    /** 将未匹配条目手动映射到库中动作。 */
+    fun mapExercise(exerciseIndex: Int, exercise: Exercise) {
+        val exercises = _uiState.value.exercises.toMutableList()
+        if (exerciseIndex !in exercises.indices) return
+        exercises[exerciseIndex] = exercises[exerciseIndex].copy(exercise = exercise)
+        _uiState.value = _uiState.value.copy(exercises = exercises)
+    }
+
+    /** 为未匹配条目创建自定义动作（无 GIF/要点）并映射。 */
+    fun createCustomExerciseFor(exerciseIndex: Int, name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        if (exerciseIndex !in _uiState.value.exercises.indices) return
+        viewModelScope.launch {
+            val custom = exerciseRepository.createCustomExercise(trimmed)
+            mapExercise(exerciseIndex, custom)
+        }
     }
 
     /** 写入：创建计划 + 一次训练记录（图片即已完成的训练，全部组视为完成）。 */

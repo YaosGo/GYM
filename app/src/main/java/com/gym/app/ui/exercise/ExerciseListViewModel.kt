@@ -84,6 +84,16 @@ class ExerciseListViewModel(
         _selectedBodyPart.value = null
     }
 
+    /** 创建自定义动作（无 GIF/要点），创建后清空筛选让新动作出现在列表中。 */
+    fun createCustomExercise(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            repository.createCustomExercise(trimmed)
+            clearFilters()
+        }
+    }
+
     /**
      * 根据部位名称返回中文标签。
      */

@@ -49,14 +49,14 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val AccentGreen = Color(0xFF4CAF50)
 private val OrangeColor = Color(0xFFFF7043)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
 
-private val LineVolume = AccentBlue
+private val LineVolume = AccentOrange
 private val LineSets = AccentGreen
 private val LineReps = OrangeColor
 
@@ -71,6 +71,7 @@ fun ExerciseTrendCard(
     currentVolume: Float = 0f,
     currentSets: Int = 0,
     currentReps: Int = 0,
+    weightMode: Int = 0,
 ) {
     val points = trendPoints.takeLast(5)
     var showVolume by remember { mutableStateOf(true) }
@@ -90,7 +91,20 @@ fun ExerciseTrendCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Text(exerciseName, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = DarkBg)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    exerciseName,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkBg,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                // 助力/负重标签（数据已按有效对抗重量展示）
+                if (weightMode != 0) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    WeightModeBadge(weightMode)
+                }
+            }
 
             if (points.size >= 2) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -380,7 +394,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlanLine(
     animProgress: Float = 1f,
 ) {
     if (points.isEmpty()) return
-    val lineColor = AccentBlue
+    val lineColor = AccentOrange
     val gridColor = Color(0xFFE0E0E0)
 
     val values = points.map { it.totalVolume }

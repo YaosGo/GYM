@@ -65,8 +65,8 @@ import com.gym.app.ui.components.pressEffect
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val AccentGreen = Color(0xFF4CAF50)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
@@ -129,7 +129,7 @@ fun HistoryScreen(
         ) { padding ->
             if (uiState.isLoading) {
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = AccentBlue)
+                    CircularProgressIndicator(color = AccentOrange)
                 }
             } else {
                 LazyColumn(
@@ -222,7 +222,7 @@ fun HistoryScreen(
 @Composable
 private fun StatsHeader(totalWorkouts: Int, monthlyWorkouts: Int) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        StatCard(modifier = Modifier.weight(1f), icon = Icons.Filled.FitnessCenter, iconColor = AccentBlue, value = "$totalWorkouts", label = "总训练次数")
+        StatCard(modifier = Modifier.weight(1f), icon = Icons.Filled.FitnessCenter, iconColor = AccentOrange, value = "$totalWorkouts", label = "总训练次数")
         StatCard(modifier = Modifier.weight(1f), icon = Icons.Filled.CalendarMonth, iconColor = AccentGreen, value = "$monthlyWorkouts", label = "本月")
     }
 }
@@ -276,7 +276,7 @@ private fun SessionCard(session: WorkoutSession, planName: String, onClick: () -
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.width(4.dp).height(44.dp).clip(RoundedCornerShape(2.dp)).background(AccentBlue))
+            Box(Modifier.width(4.dp).height(44.dp).clip(RoundedCornerShape(2.dp)).background(AccentOrange))
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

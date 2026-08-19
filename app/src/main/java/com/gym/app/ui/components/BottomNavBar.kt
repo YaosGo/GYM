@@ -30,8 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
 
@@ -63,7 +63,7 @@ fun GymBottomNavBar(
             val isSelected = selectedRoute == tab.route
 
             val bgColor by animateColorAsState(
-                targetValue = if (isSelected) AccentBlue else Color.Transparent,
+                targetValue = if (isSelected) AccentOrange else Color.Transparent,
                 animationSpec = tween(AnimationConfig.NavBar.tabColorMs),
                 label = "tabBg",
             )

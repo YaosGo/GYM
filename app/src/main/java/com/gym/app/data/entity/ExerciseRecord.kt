@@ -62,6 +62,11 @@ data class ExerciseRecord(
     @ColumnInfo(name = "weight")
     val weight: String = "[]",
 
+    /** 每组有效对抗重量（kg），JSON 数组，与 weight 一一对应。
+     * 助力=体重−助力值，负重=体重+附加重，普通=与 weight 相同；空数组表示无（旧数据回退到 weight）。 */
+    @ColumnInfo(name = "effective_weight")
+    val effectiveWeight: String = "[]",
+
     /** 动作排序 */
     @ColumnInfo(name = "sort_order")
     val sortOrder: Int = 0,

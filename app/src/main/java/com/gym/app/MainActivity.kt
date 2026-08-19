@@ -28,11 +28,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,8 +88,9 @@ import com.gym.app.ui.settings.SettingsScreen
 import com.gym.app.ui.theme.GymTheme
 import com.gym.app.ui.workout.WorkoutScreen
 import com.gym.app.ui.workout.WorkoutViewModel
+import kotlinx.coroutines.launch
 
-private val DarkBg = Color(0xFF1A1A2E)
+private val DarkBg = Color(0xFF3E2E23)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
@@ -115,6 +124,7 @@ private fun MainScreen(
 
     // 收集设置
     val weightUnit by settings.weightUnit.collectAsState(initial = "kg")
+    val bodyWeightKg by settings.bodyWeightKg.collectAsState(initial = 0f)
 
     // 当前底部 Tab（计划/历史/动作）
     var selectedTab by rememberSaveable { mutableStateOf(NavRoutes.PLAN_LIST) }
@@ -138,6 +148,13 @@ private fun MainScreen(
     // 共享状态：面板显示时通知导航栏收起
     val sheetShowing = remember { mutableStateOf(false) }
 
+    // 启动加载画面：完整展示 App 图标（猫图，不裁切），短暂停留后淡出
+    var splashVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(1500L)
+        splashVisible = false
+    }
+
     val bottomNavHeight by animateDpAsState(
         targetValue = if (sheetShowing.value || !isMainTab) 0.dp else 64.dp,
         animationSpec = tween(300),
@@ -158,7 +175,7 @@ private fun MainScreen(
                     exitTransition = { fadeOut(tween(AnimationConfig.Page.tabFadeMs, easing = AnimationConfig.Page.easing)) },
                 ) {
                     val planListVM: PlanListViewModel = viewModel(
-                        factory = PlanListViewModel.Factory(workoutRepository)
+                        factory = PlanListViewModel.Factory(workoutRepository, exerciseRepository, settings)
                     )
                     PlanListScreen(
                         viewModel = planListVM,
@@ -166,6 +183,7 @@ private fun MainScreen(
                         onImportImage = { navController.navigate(NavRoutes.IMPORT_IMAGE) },
                         onPlanClick = { navController.navigate(NavRoutes.workout(it)) },
                         onPlanView = { navController.navigate(NavRoutes.editPlan(it)) },
+                        onPlanImported = { navController.navigate(NavRoutes.editPlan(it)) },
                     )
                 }
 
@@ -252,6 +270,10 @@ private fun MainScreen(
                         workoutRepository = workoutRepository,
                         exerciseRepository = exerciseRepository,
                         weightUnit = weightUnit,
+                        bodyWeightKg = bodyWeightKg,
+                        onBodyWeightConfirmed = { w ->
+                            scope.launch { settings.setBodyWeight(w) }
+                        },
                         onBack = { navController.popBackStack() },
                         onComplete = {
                             navController.navigate(NavRoutes.PLAN_LIST) {
@@ -322,7 +344,13 @@ private fun MainScreen(
                     popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeIn(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
                     popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(AnimationConfig.Page.pushSlideMs, easing = AnimationConfig.Page.easing)) + fadeOut(tween(AnimationConfig.Page.pushFadeMs, easing = AnimationConfig.Page.easing)) },
                 ) {
-                    SettingsScreen(settings = settings, scope = scope, onBack = { navController.popBackStack() })
+                    SettingsScreen(
+                        settings = settings,
+                        workoutRepository = workoutRepository,
+                        scope = scope,
+                        onBack = { navController.popBackStack() },
+                        sheetShowing = sheetShowing,
+                    )
                 }
             }
 
@@ -346,6 +374,30 @@ private fun MainScreen(
                 },
                 onSettingsClick = { navController.navigate(NavRoutes.SETTINGS) },
             )
+        }
+
+        // 启动加载画面（最顶层）：白色背景 + 完整猫图（圆角方形，不裁切）
+        AnimatedVisibility(
+            visible = splashVisible,
+            enter = EnterTransition.None,
+            exit = fadeOut(tween(AnimationConfig.Page.tabFadeMs)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(WhiteColor),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.splash_cat),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth(0.55f)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(28.dp)),
+                    contentScale = ContentScale.Crop,
+                )
+            }
         }
     } // Box end
 }

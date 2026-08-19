@@ -31,8 +31,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,8 +44,10 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -80,13 +84,15 @@ import androidx.activity.compose.BackHandler
 import com.gym.app.data.entity.Exercise
 import com.gym.app.data.repository.ExerciseRepository
 import com.gym.app.ui.components.AnimationConfig
+import com.gym.app.ui.components.CreateCustomExerciseDialog
+import com.gym.app.ui.components.ExerciseGifImage
 import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
 
 // 颜色常量
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val CardBg = Color(0xFFFAFAFA)
@@ -117,6 +123,7 @@ fun ExerciseListScreen(
     val uiState by viewModel.uiState.collectAsState()
     val selectedExerciseId = remember { mutableStateOf<String?>(null) }
     val selectedExercise = remember { mutableStateOf<Exercise?>(null) }
+    var showCreateCustom by remember { mutableStateOf(false) }
 
     var sheetContentVisible by remember { mutableStateOf(false) }
     LaunchedEffect(selectedExerciseId.value) {
@@ -182,6 +189,12 @@ fun ExerciseListScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            // 搜索栏
+            SearchBar(
+                query = uiState.searchQuery,
+                onQueryChanged = viewModel::onSearchQueryChanged,
+            )
+
             // 分类标签
             BodyPartTabs(
                 bodyParts = uiState.bodyParts,
@@ -195,18 +208,44 @@ fun ExerciseListScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator(color = AccentBlue)
+                    CircularProgressIndicator(color = AccentOrange)
                 }
             } else if (uiState.exercises.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "No exercises found",
-                        color = MediumGray,
-                        fontSize = 16.sp,
-                    )
+                if (uiState.searchQuery.isNotBlank()) {
+                    // 搜索无结果 → 创建自定义动作入口
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            LocaleStrings.noResults,
+                            color = MediumGray,
+                            fontSize = 14.sp,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(onClick = { showCreateCustom = true }) {
+                            Text(
+                                LocaleStrings.createCustomFromLibrary
+                                    .replace("{0}", uiState.searchQuery.trim()),
+                                color = AccentOrange,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "No exercises found",
+                            color = MediumGray,
+                            fontSize = 16.sp,
+                        )
+                    }
                 }
             } else {
                 LazyVerticalGrid(
@@ -230,14 +269,27 @@ fun ExerciseListScreen(
 
         // 磨砂玻璃底部滑出 — 动作详情（与训练计划/训练完成一致）
         if (sheetContentVisible && selectedExercise.value != null) {
+            val current = selectedExercise.value!!
             FrostedBottomSheet(
                 visible = true,
                 onDismiss = {
                     selectedExerciseId.value = null
                 },
             ) {
-                ExerciseDetailSheetContent(exercise = selectedExercise.value!!)
+                ExerciseDetailSheetContent(exercise = current)
             }
+        }
+
+        // 创建自定义动作对话框（搜索无结果入口）
+        if (showCreateCustom) {
+            CreateCustomExerciseDialog(
+                initialName = uiState.searchQuery.trim(),
+                onConfirm = { name ->
+                    viewModel.createCustomExercise(name)
+                    showCreateCustom = false
+                },
+                onDismiss = { showCreateCustom = false },
+            )
         }
     } // Box end
 }
@@ -334,7 +386,7 @@ private fun ExerciseGridCard(
     exercise: Exercise,
     onClick: () -> Unit,
 ) {
-    val accentColor = bodyPartColors[exercise.bodyPart] ?: AccentBlue
+    val accentColor = bodyPartColors[exercise.bodyPart] ?: AccentOrange
 
     Card(
         modifier = Modifier
@@ -345,7 +397,7 @@ private fun ExerciseGridCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column {
-            // GIF 动图区域
+            // GIF 动图区域（自定义动作显示占位图标）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -354,13 +406,13 @@ private fun ExerciseGridCard(
                     .background(CardBg),
                 contentAlignment = Alignment.Center,
             ) {
-                AsyncImage(
-                    model = "file:///android_asset/${exercise.gifPath}",
-                    contentDescription = exercise.displayName,
+                ExerciseGifImage(
+                    exercise = exercise,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(8.dp),
                     contentScale = ContentScale.Fit,
+                    placeholderIconSize = 32.dp,
                 )
             }
 
@@ -381,7 +433,7 @@ private fun ExerciseGridCard(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 彩色部位标签条
+                    // 彩色部位标签条（自定义动作显示蓝色「自定义」角标）
                     Box(
                         modifier = Modifier
                             .height(18.dp)
@@ -391,7 +443,8 @@ private fun ExerciseGridCard(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            ExerciseListViewModel.bodyPartLabel(exercise.bodyPart),
+                            if (exercise.isCustom) LocaleStrings.customBadge
+                            else ExerciseListViewModel.bodyPartLabel(exercise.bodyPart),
                             style = MaterialTheme.typography.labelSmall,
                             color = accentColor,
                             fontSize = 10.sp,
@@ -410,7 +463,9 @@ private fun ExerciseGridCard(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ExerciseDetailSheetContent(exercise: Exercise) {
+private fun ExerciseDetailSheetContent(
+    exercise: Exercise,
+) {
     val steps = remember(exercise) { parseInstructionSteps(exercise.instructionStepsZh) }
 
     Column(
@@ -418,20 +473,29 @@ private fun ExerciseDetailSheetContent(exercise: Exercise) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        // GIF 展示区
+        // GIF 展示区（自定义动作显示占位图标 + 角标）
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
+                .aspectRatio(if (exercise.isCustom) 1.4f else 1f)
                 .background(Color.Black),
             contentAlignment = Alignment.Center,
         ) {
-            AsyncImage(
-                model = "file:///android_asset/${exercise.gifPath}",
-                contentDescription = exercise.displayName,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit,
-            )
+            if (exercise.isCustom) {
+                Icon(
+                    Icons.Filled.FitnessCenter,
+                    contentDescription = exercise.displayName,
+                    tint = WhiteColor.copy(alpha = 0.5f),
+                    modifier = Modifier.size(56.dp),
+                )
+            } else {
+                AsyncImage(
+                    model = "file:///android_asset/${exercise.gifPath}",
+                    contentDescription = exercise.displayName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -448,10 +512,15 @@ private fun ExerciseDetailSheetContent(exercise: Exercise) {
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(exercise.name, color = WhiteColor.copy(alpha = 0.6f), fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), color = WhiteColor.copy(alpha = 0.8f), fontSize = 14.sp)
+                    if (exercise.isCustom) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(LocaleStrings.customBadge, color = AccentOrange, fontSize = 13.sp)
+                    } else {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(exercise.name, color = WhiteColor.copy(alpha = 0.6f), fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), color = WhiteColor.copy(alpha = 0.8f), fontSize = 14.sp)
+                    }
                 }
             }
         }
@@ -459,29 +528,38 @@ private fun ExerciseDetailSheetContent(exercise: Exercise) {
         Column(
             modifier = Modifier.fillMaxWidth().background(WhiteColor).padding(16.dp),
         ) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TagChip(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), AccentBlue)
-                TagChip(ExerciseListViewModel.targetLabel(exercise.target), Color(0xFFFF7043))
-                TagChip(ExerciseListViewModel.equipmentLabel(exercise.equipment), Color(0xFF26A69A))
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(LocaleStrings.instructions, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (steps.isNotEmpty()) {
-                steps.forEachIndexed { index, step ->
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn(animationSpec = tween(durationMillis = AnimationConfig.Stagger.itemDurationMs, delayMillis = index * AnimationConfig.Stagger.sheetStepDelayMs)) +
-                                slideInVertically(animationSpec = tween(durationMillis = AnimationConfig.Stagger.itemDurationMs, delayMillis = index * AnimationConfig.Stagger.sheetStepDelayMs)) { it / 2 },
-                    ) {
-                        StepChip(stepNumber = index + 1, text = step)
-                    }
+            if (exercise.isCustom) {
+                // 自定义动作：无标签、无要点
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LightGray).padding(16.dp),
+                ) {
+                    Text(LocaleStrings.customNoInstructions, color = DarkBg, lineHeight = 24.sp)
                 }
             } else {
-                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LightGray).padding(16.dp)) {
-                    Text(exercise.instructionsZh, color = DarkBg, lineHeight = 24.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TagChip(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), AccentOrange)
+                    TagChip(ExerciseListViewModel.targetLabel(exercise.target), Color(0xFFFF7043))
+                    TagChip(ExerciseListViewModel.equipmentLabel(exercise.equipment), Color(0xFF26A69A))
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(LocaleStrings.instructions, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (steps.isNotEmpty()) {
+                    steps.forEachIndexed { index, step ->
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn(animationSpec = tween(durationMillis = AnimationConfig.Stagger.itemDurationMs, delayMillis = index * AnimationConfig.Stagger.sheetStepDelayMs)) +
+                                    slideInVertically(animationSpec = tween(durationMillis = AnimationConfig.Stagger.itemDurationMs, delayMillis = index * AnimationConfig.Stagger.sheetStepDelayMs)) { it / 2 },
+                        ) {
+                            StepChip(stepNumber = index + 1, text = step)
+                        }
+                    }
+                } else {
+                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LightGray).padding(16.dp)) {
+                        Text(exercise.instructionsZh, color = DarkBg, lineHeight = 24.sp)
+                    }
                 }
             }
         }

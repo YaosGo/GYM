@@ -25,14 +25,22 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercises WHERE id = :id")
     suspend fun getExerciseById(id: String): Exercise?
 
-    @Query("SELECT DISTINCT body_part FROM exercises ORDER BY body_part ASC")
+    @Query("SELECT DISTINCT body_part FROM exercises WHERE body_part != '' ORDER BY body_part ASC")
     fun getAllBodyParts(): Flow<List<String>>
 
-    @Query("SELECT DISTINCT equipment FROM exercises ORDER BY equipment ASC")
+    @Query("SELECT DISTINCT equipment FROM exercises WHERE equipment != '' ORDER BY equipment ASC")
     fun getAllEquipments(): Flow<List<String>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(exercises: List<Exercise>)
+
+    /** 插入单个自定义动作。 */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertExercise(exercise: Exercise)
+
+    /** 更新动作的重量模式（助力/负重手动标记）。 */
+    @Query("UPDATE exercises SET weight_mode = :weightMode WHERE id = :id")
+    suspend fun updateWeightMode(id: String, weightMode: Int)
 
     @Query("SELECT COUNT(*) FROM exercises")
     suspend fun getCount(): Int

@@ -2,14 +2,14 @@ package com.gym.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary palette
-val Blue500 = Color(0xFF2196F3)
-val Blue700 = Color(0xFF1976D2)
-val Blue200 = Color(0xFF90CAF9)
+// 主题色（奶油橘猫色系，取自 APP_ICON 猫毛色）
+val CatOrange = Color(0xFFF2994A)
+val CatOrangeDark = Color(0xFFC96F1B)
+val CatOrangeLight = Color(0xFFF7C899)
 
-// Secondary palette
-val Orange500 = Color(0xFFFF9800)
-val Orange700 = Color(0xFFF57C00)
+// 辅助语义色（助力/负重标签、警示）——橙红与主题橘区分
+val AccentOrangeRed = Color(0xFFFF7043)
+val AccentOrangeRedDark = Color(0xFFE64A19)
 
 // Neutral
 val Gray50 = Color(0xFFFAFAFA)

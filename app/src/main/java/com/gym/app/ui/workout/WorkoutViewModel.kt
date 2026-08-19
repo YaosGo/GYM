@@ -67,6 +67,8 @@ data class WorkoutUiState(
     val savedSessionId: Long? = null,
     val isSaving: Boolean = false,
     val showCompletionSheet: Boolean = false,
+    /** 训练开始时的体重快照（kg），用于助力/负重动作的有效重量换算 */
+    val bodyWeightKg: Float = 0f,
 )
 
 class WorkoutViewModel(
@@ -169,9 +171,13 @@ class WorkoutViewModel(
         }
     }
 
-    /** 开始训练（状态一→状态二） */
-    fun startWorkout() {
-        _uiState.value = _uiState.value.copy(isRunning = true, isPaused = false)
+    /** 开始训练（状态一→状态二），记录本次训练的体重快照。 */
+    fun startWorkout(bodyWeightKg: Float) {
+        _uiState.value = _uiState.value.copy(
+            isRunning = true,
+            isPaused = false,
+            bodyWeightKg = bodyWeightKg.coerceAtLeast(0f),
+        )
     }
 
     /** 暂停训练（状态二→状态三） */
@@ -197,10 +203,12 @@ class WorkoutViewModel(
             timerJob?.cancel()
 
             val today = dateFormat.format(Date())
+            val bodyWeightKg = _uiState.value.bodyWeightKg
             val session = WorkoutSession(
                 planId = planId,
                 date = today,
                 durationSeconds = _uiState.value.elapsedSeconds,
+                bodyWeightKg = bodyWeightKg,
             )
 
             // 仅记录用户实际勾选完成的组；未完成任何组的动作不写入记录
@@ -209,6 +217,8 @@ class WorkoutViewModel(
                 if (completedSets.isEmpty()) return@mapNotNull null
                 val repsList = completedSets.map { it.reps }
                 val weightList = completedSets.map { it.weight }
+                // 有效对抗重量与 weight 一一对应：助力=体重−助力值，负重=体重+附加重
+                val effectiveList = completedSets.map { effectiveWeight(state.exercise, it.weight, bodyWeightKg) }
                 ExerciseRecord(
                     sessionId = 0,
                     exerciseId = state.exercise.id,
@@ -217,6 +227,7 @@ class WorkoutViewModel(
                     actualSets = completedSets.size,
                     actualReps = intListAdapter.toJson(repsList),
                     weight = floatListAdapter.toJson(weightList),
+                    effectiveWeight = floatListAdapter.toJson(effectiveList),
                     sortOrder = state.sortOrder,
                 )
             }
@@ -324,23 +335,29 @@ class WorkoutViewModel(
 
     // --- 辅助方法 ---
 
-    /** 完成重量：仅统计已勾选完成的组（重量 × 次数）。 */
+    /** 完成重量：仅统计已勾选完成的组（有效重量 × 次数）。 */
     private fun calculateCompletedTons(exercises: List<ExerciseWorkoutState>): Float {
+        val bodyWeightKg = _uiState.value.bodyWeightKg
         return exercises.sumOf { state ->
             state.actualSets.filter { it.completed }.sumOf { set ->
-                (set.weight.toDouble() * set.reps).toDouble()
+                (effectiveWeight(state.exercise, set.weight, bodyWeightKg).toDouble() * set.reps).toDouble()
             }
         }.toFloat()
     }
 
-    /** 目标重量：统计当前全部组（重量 × 次数），不含完成标记。 */
+    /** 目标重量：统计当前全部组（有效重量 × 次数），不含完成标记。 */
     private fun calculateTargetTons(exercises: List<ExerciseWorkoutState>): Float {
+        val bodyWeightKg = _uiState.value.bodyWeightKg
         return exercises.sumOf { state ->
             state.actualSets.sumOf { set ->
-                (set.weight.toDouble() * set.reps).toDouble()
+                (effectiveWeight(state.exercise, set.weight, bodyWeightKg).toDouble() * set.reps).toDouble()
             }
         }.toFloat()
     }
+
+    /** 有效对抗重量：助力=体重−助力值，负重=体重+附加重；无体重快照时回退到原始重量。 */
+    private fun effectiveWeight(exercise: Exercise, recordedWeight: Float, bodyWeightKg: Float): Float =
+        if (bodyWeightKg > 0f) exercise.effectiveWeight(bodyWeightKg, recordedWeight) else recordedWeight
 
     private fun calculateBestSet(allRecords: List<ExerciseRecord>): BestSet? {
         if (allRecords.isEmpty()) return null

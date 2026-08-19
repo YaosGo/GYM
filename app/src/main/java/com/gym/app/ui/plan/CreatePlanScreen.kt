@@ -60,14 +60,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.gym.app.data.entity.Exercise
+import com.gym.app.ui.components.CreateCustomExerciseDialog
+import com.gym.app.ui.components.ExerciseGifImage
 import com.gym.app.ui.components.LocaleStrings
+import com.gym.app.ui.components.WeightModeSelectorRow
 import com.gym.app.ui.components.displayName
 import com.gym.app.ui.components.pressEffect
 
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
@@ -83,6 +85,9 @@ fun CreatePlanScreen(
 
     // 保存对话框中的计划名称（本地状态）
     var dialogPlanName by remember { mutableStateOf("") }
+
+    // 创建自定义动作对话框（搜索无结果入口）
+    var showCreateCustom by remember { mutableStateOf(false) }
 
     // 保存对话框
     if (uiState.showSaveDialog) {
@@ -113,7 +118,7 @@ fun CreatePlanScreen(
                     enabled = dialogPlanName.isNotBlank(),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentBlue,
+                        containerColor = AccentOrange,
                     ),
                 ) {
                     Text("确定")
@@ -221,6 +226,7 @@ fun CreatePlanScreen(
                             index = index,
                             onSetsChanged = { viewModel.updateExerciseSets(selected.exercise.id, it) },
                             onRepsChanged = { viewModel.updateExerciseReps(selected.exercise.id, it) },
+                            onWeightModeChanged = { viewModel.updateExerciseWeightMode(selected.exercise.id, it) },
                             onRemove = { viewModel.removeExercise(selected.exercise.id) },
                             onMoveUp = {
                                 if (index > 0) viewModel.moveExercise(index, index - 1)
@@ -243,17 +249,26 @@ fun CreatePlanScreen(
                 if (uiState.isSearching) {
                     if (uiState.searchResults.isEmpty()) {
                         item {
-                            Box(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 48.dp),
-                                contentAlignment = Alignment.Center,
+                                    .padding(vertical = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 Text(
-                                    "未找到匹配的动作",
+                                    LocaleStrings.noResults,
                                     color = MediumGray,
                                     fontSize = 14.sp,
                                 )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                TextButton(onClick = { showCreateCustom = true }) {
+                                    Text(
+                                        LocaleStrings.createCustomFromLibrary.replace("{0}", uiState.searchQuery.trim()),
+                                        color = AccentOrange,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -317,7 +332,7 @@ fun CreatePlanScreen(
                 enabled = uiState.selectedExercises.isNotEmpty() && !uiState.isSaving,
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentBlue,
+                    containerColor = AccentOrange,
                 ),
             ) {
                 if (uiState.isSaving) {
@@ -337,6 +352,18 @@ fun CreatePlanScreen(
             }
         }
     }
+
+    // 创建自定义动作对话框（搜索无结果入口）
+    if (showCreateCustom) {
+        CreateCustomExerciseDialog(
+            initialName = uiState.searchQuery.trim(),
+            onConfirm = { name ->
+                viewModel.createCustomExercise(name)
+                showCreateCustom = false
+            },
+            onDismiss = { showCreateCustom = false },
+        )
+    }
 }
 
 @Composable
@@ -345,6 +372,7 @@ private fun SelectedExerciseCard(
     index: Int,
     onSetsChanged: (Int) -> Unit,
     onRepsChanged: (Int) -> Unit,
+    onWeightModeChanged: (Int) -> Unit,
     onRemove: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -374,14 +402,14 @@ private fun SelectedExerciseCard(
                 modifier = Modifier.width(24.dp),
             )
 
-            // GIF 缩略图
-            AsyncImage(
-                model = "file:///android_asset/${selected.exercise.gifPath}",
-                contentDescription = selected.exercise.displayName,
+            // GIF 缩略图（自定义动作显示占位图标）
+            ExerciseGifImage(
+                exercise = selected.exercise,
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(6.dp)),
                 contentScale = ContentScale.Crop,
+                placeholderIconSize = 20.dp,
             )
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -410,6 +438,12 @@ private fun SelectedExerciseCard(
                         modifier = Modifier.width(64.dp),
                     )
                 }
+                // 重量记录方式三态切换（普通/助力/负重）
+                Spacer(modifier = Modifier.height(4.dp))
+                WeightModeSelectorRow(
+                    currentMode = selected.exercise.weightMode,
+                    onModeChanged = onWeightModeChanged,
+                )
             }
 
             // 操作按钮
@@ -487,15 +521,15 @@ private fun SearchResultItem(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // GIF 缩略图
-            AsyncImage(
-                model = "file:///android_asset/${exercise.gifPath}",
-                contentDescription = exercise.displayName,
+            // GIF 缩略图（自定义动作显示占位图标）
+            ExerciseGifImage(
+                exercise = exercise,
                 modifier = Modifier
                     .size(48.dp)
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(6.dp)),
                 contentScale = ContentScale.Crop,
+                placeholderIconSize = 20.dp,
             )
 
             Spacer(modifier = Modifier.width(10.dp))
@@ -509,9 +543,10 @@ private fun SearchResultItem(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "${ExerciseListViewModel.bodyPartLabel(exercise.bodyPart)} · ${exercise.target} · ${exercise.equipment}",
+                    text = if (exercise.isCustom) LocaleStrings.customBadge
+                    else "${ExerciseListViewModel.bodyPartLabel(exercise.bodyPart)} · ${exercise.target} · ${exercise.equipment}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MediumGray,
+                    color = if (exercise.isCustom) AccentOrange else MediumGray,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -521,13 +556,13 @@ private fun SearchResultItem(
                 Text(
                     text = "已添加",
                     style = MaterialTheme.typography.labelSmall,
-                    color = AccentBlue,
+                    color = AccentOrange,
                 )
             } else {
                 Icon(
                     Icons.Filled.Add,
                     contentDescription = "添加",
-                    tint = AccentBlue,
+                    tint = AccentOrange,
                 )
             }
         }

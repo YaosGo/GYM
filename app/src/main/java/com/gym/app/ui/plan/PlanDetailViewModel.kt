@@ -8,6 +8,7 @@ import com.gym.app.data.entity.WorkoutPlanExercise
 import com.gym.app.data.repository.ExerciseRepository
 import com.gym.app.data.repository.WorkoutRepository
 import com.gym.app.ui.components.displayName
+import com.gym.app.ui.components.parseEffectiveWeights
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -79,6 +80,26 @@ class PlanDetailViewModel(
         }
     }
 
+    /** 生成计划分享串（空计划返回 null）。 */
+    fun buildShareString(): String? {
+        val items = _exercises.value
+        if (items.isEmpty()) return null
+        val shared = com.gym.app.data.planshare.PlanShareCodec.SharedPlan(
+            name = _planName.value.trim().ifBlank { "分享的计划" },
+            exercises = items.map { item ->
+                com.gym.app.data.planshare.PlanShareCodec.SharedExercise(
+                    id = item.planExercise.exerciseId,
+                    name = item.name,
+                    custom = item.exercise?.isCustom == true,
+                    sets = item.planExercise.targetSets,
+                    reps = item.planExercise.targetReps,
+                    weightMode = item.exercise?.weightMode ?: 0,
+                )
+            },
+        )
+        return com.gym.app.data.planshare.PlanShareCodec.encode(shared)
+    }
+
     private suspend fun loadTrainingData() {
         val sessions: List<com.gym.app.data.entity.WorkoutSession> =
             workoutRepository.getSessionsByPlanId(planId).let { it.first() }
@@ -90,9 +111,6 @@ class PlanDetailViewModel(
         val intListType = com.squareup.moshi.Types.newParameterizedType(
             List::class.java, Int::class.javaObjectType
         )
-        val floatListType = com.squareup.moshi.Types.newParameterizedType(
-            List::class.java, Float::class.javaObjectType
-        )
 
         val points = mutableListOf<com.gym.app.ui.components.TrendPoint>()
         for (session in sessions) {
@@ -101,9 +119,8 @@ class PlanDetailViewModel(
             var maxWeight = 0f
             var maxReps = 0
             for (record in records) {
-                val weightList: List<Float> = try {
-                    moshi.adapter<List<Float>>(floatListType).fromJson(record.weight) ?: emptyList()
-                } catch (_: Exception) { emptyList() }
+                // 有效对抗重量：助力=体重−助力值，负重=体重+附加重（旧数据回退 weight）
+                val weightList = parseEffectiveWeights(record)
                 val repsList: List<Int> = try {
                     moshi.adapter<List<Int>>(intListType).fromJson(record.actualReps) ?: emptyList()
                 } catch (_: Exception) { emptyList() }
@@ -196,6 +213,27 @@ class PlanDetailViewModel(
         }
     }
 
+    /** 更新动作的重量记录方式（普通/助力/负重），乐观更新界面 + 异步写库。 */
+    fun updateWeightMode(index: Int, mode: Int) {
+        val current = _exercises.value.toMutableList()
+        if (index in current.indices) {
+            val exercise = current[index].exercise ?: return
+            current[index] = current[index].copy(exercise = exercise.copy(weightMode = mode))
+            _exercises.value = current
+            viewModelScope.launch {
+                exerciseRepository.updateWeightMode(exercise.id, mode)
+            }
+        }
+    }
+
+    /** 搜索无结果时创建自定义动作并直接加入当前计划。 */
+    fun createCustomExercise(name: String) {
+        viewModelScope.launch {
+            val exercise = exerciseRepository.createCustomExercise(name)
+            addExercise(exercise)
+        }
+    }
+
     /** 拖拽重排：fromIndex → toIndex */
     fun moveItem(fromIndex: Int, toIndex: Int) {
         val list = _exercises.value.toMutableList()
@@ -211,10 +249,11 @@ class PlanDetailViewModel(
         viewModelScope.launch {
             _isSaving.value = true
             try {
-                // 更新计划名称
+                // 更新计划名称（编辑模式可改名；空名不覆盖原名称）
+                val newName = _planName.value.trim()
                 val plan = workoutRepository.getPlanById(planId)
-                if (plan != null) {
-                    workoutRepository.updatePlan(plan.copy(name = _planName.value))
+                if (plan != null && newName.isNotEmpty()) {
+                    workoutRepository.updatePlan(plan.copy(name = newName))
                 }
 
                 // 删除旧的动作关联，重新插入

@@ -71,5 +71,10 @@ fun ExerciseJson.toEntity(): Exercise {
         imagePath = image,
         gifPath = gifUrl,
         nameZh = ExerciseDisplayName.translate(name),
+        weightMode = when (name) {
+            in Exercise.ASSISTED_EXERCISE_NAMES -> Exercise.WEIGHT_MODE_ASSISTED
+            in Exercise.WEIGHTED_EXERCISE_NAMES -> Exercise.WEIGHT_MODE_WEIGHTED
+            else -> Exercise.WEIGHT_MODE_NORMAL
+        },
     )
 }

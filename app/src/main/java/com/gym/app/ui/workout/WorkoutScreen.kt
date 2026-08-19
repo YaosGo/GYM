@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -51,6 +52,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
@@ -75,11 +77,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.gym.app.ui.components.AnimationConfig
+import com.gym.app.ui.components.ExerciseGifImage
 import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
@@ -89,8 +92,8 @@ import com.gym.app.ui.history.SessionDetailScreenContent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val AccentGreen = Color(0xFF4CAF50)
 private val AccentRed = Color(0xFFE53935)
 private val LightGray = Color(0xFFF5F5F5)
@@ -104,6 +107,10 @@ fun WorkoutScreen(
     workoutRepository: com.gym.app.data.repository.WorkoutRepository,
     exerciseRepository: com.gym.app.data.repository.ExerciseRepository,
     weightUnit: String = "kg",
+    /** 设置里的当前体重（kg），开始训练弹窗的预填值；0 表示未设置 */
+    bodyWeightKg: Float = 0f,
+    /** 开始训练确认体重后回写设置 */
+    onBodyWeightConfirmed: (Float) -> Unit = {},
     onBack: () -> Unit,
     onComplete: (Long) -> Unit,
     sheetShowing: androidx.compose.runtime.MutableState<Boolean> = mutableStateOf(false),
@@ -112,6 +119,8 @@ fun WorkoutScreen(
     val scope = rememberCoroutineScope()
     var showTips by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
+    var showStartWeightDialog by remember { mutableStateOf(false) }
+    var weightInput by remember { mutableStateOf("") }
 
     var sheetContentVisible by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.showCompletionSheet) {
@@ -145,7 +154,7 @@ fun WorkoutScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showExitDialog = false }) {
-                    Text("继续训练", color = AccentBlue)
+                    Text("继续训练", color = AccentOrange)
                 }
             },
         )
@@ -155,6 +164,54 @@ fun WorkoutScreen(
     val exitWorkout = {
         viewModel.dismissCompletionSheet()
         uiState.savedSessionId?.let { onComplete(it) }
+    }
+
+    // 开始训练：先弹体重确认（预填设置值，界面单位斤），确认后换算 kg 随本场训练保存
+    val requestStartWorkout = {
+        weightInput = if (bodyWeightKg > 0f) formatWeight(bodyWeightKg * 2f) else ""
+        showStartWeightDialog = true
+    }
+
+    if (showStartWeightDialog) {
+        AlertDialog(
+            onDismissRequest = { showStartWeightDialog = false },
+            title = { Text(LocaleStrings.confirmBodyWeightTitle, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(LocaleStrings.confirmBodyWeightDesc, fontSize = 14.sp, lineHeight = 20.sp, color = MediumGray)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = weightInput,
+                        onValueChange = { input ->
+                            // 仅允许数字和一个小数点
+                            weightInput = input.filter { it.isDigit() || it == '.' }
+                        },
+                        label = { Text("${LocaleStrings.weightInfo} (${LocaleStrings.weightUnitJin})", fontSize = 13.sp) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val w = weightInput.toFloatOrNull() ?: 0f
+                    if (w > 0f) {
+                        showStartWeightDialog = false
+                        // 界面输入为斤，存储与换算用 kg
+                        val weightKg = w / 2f
+                        onBodyWeightConfirmed(weightKg)
+                        viewModel.startWorkout(weightKg)
+                    }
+                }) {
+                    Text(LocaleStrings.confirm, color = AccentOrange, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartWeightDialog = false }) {
+                    Text(LocaleStrings.cancel, color = MediumGray)
+                }
+            },
+        )
     }
 
     // 系统返回键拦截：面板显示时关闭面板并返回"我的计划"
@@ -188,6 +245,7 @@ fun WorkoutScreen(
                 uiState = uiState,
                 viewModel = viewModel,
                 scope = scope,
+                onRequestStart = requestStartWorkout,
             )
         },
         containerColor = LightGray,
@@ -221,6 +279,7 @@ fun WorkoutScreen(
                 ExerciseWorkoutCard(
                     state = state,
                     weightUnit = weightUnit,
+                    bodyWeightKg = uiState.bodyWeightKg,
                     onToggleExpanded = { viewModel.toggleExpanded(index) },
                     onToggleSetCompleted = { setIndex -> viewModel.toggleSetCompleted(index, setIndex) },
                     onAddSet = { viewModel.addSet(index) },
@@ -248,7 +307,7 @@ fun WorkoutScreen(
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Info, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.Info, null, tint = AccentOrange, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("训练提示", color = WhiteColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
@@ -262,7 +321,7 @@ fun WorkoutScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { showTips = false }) {
-                            Text("知道了", color = AccentBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("知道了", color = AccentOrange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -293,6 +352,7 @@ private fun WorkoutBottomBar(
     uiState: WorkoutUiState,
     viewModel: WorkoutViewModel,
     scope: kotlinx.coroutines.CoroutineScope,
+    onRequestStart: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -305,7 +365,7 @@ private fun WorkoutBottomBar(
             // 状态一：未开始 → 显示"开始"
             !uiState.isRunning && !uiState.isPaused -> {
                 Button(
-                    onClick = { viewModel.startWorkout() },
+                    onClick = onRequestStart,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
@@ -448,6 +508,7 @@ private fun StatItem(label: String, value: String, unit: String) {
 private fun ExerciseWorkoutCard(
     state: ExerciseWorkoutState,
     weightUnit: String,
+    bodyWeightKg: Float,
     onToggleExpanded: () -> Unit,
     onToggleSetCompleted: (Int) -> Unit,
     onAddSet: () -> Unit,
@@ -463,17 +524,28 @@ private fun ExerciseWorkoutCard(
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // GIF 缩略图
-                AsyncImage(
-                    model = "file:///android_asset/${state.exercise.gifPath}",
-                    contentDescription = state.exercise.displayName,
+                // GIF 缩略图（自定义动作显示占位图标）
+                ExerciseGifImage(
+                    exercise = state.exercise,
                     modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)),
                     contentScale = ContentScale.Crop,
+                    placeholderIconSize = 20.dp,
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(state.exercise.displayName, fontWeight = FontWeight.Bold, color = DarkBg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(ExerciseListViewModel.bodyPartLabel(state.exercise.bodyPart), fontSize = 12.sp, color = MediumGray)
+                    Text(
+                        if (state.exercise.isCustom) LocaleStrings.customBadge
+                        else ExerciseListViewModel.bodyPartLabel(state.exercise.bodyPart),
+                        fontSize = 12.sp,
+                        color = if (state.exercise.isCustom) AccentOrange else MediumGray,
+                    )
+                    // 助力/负重动作：说明重量输入语义
+                    if (state.exercise.isAssisted) {
+                        Text(LocaleStrings.weightModeAssistedDesc, fontSize = 11.sp, color = Color(0xFFFF7043))
+                    } else if (state.exercise.isWeighted) {
+                        Text(LocaleStrings.weightModeWeightedDesc, fontSize = 11.sp, color = Color(0xFFFF7043))
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -503,7 +575,11 @@ private fun ExerciseWorkoutCard(
             AnimatedVisibility(visible = state.isExpanded, enter = expandVertically(), exit = shrinkVertically()) {
                 Column {
                     state.actualSets.forEachIndexed { i, s ->
-                        SetRow(i + 1, s, state.actualSets.size > 1, weightUnit, { onToggleSetCompleted(i) }, { onRepsChanged(i, it) }, { onWeightChanged(i, it) }, { onRemoveSet(i) })
+                        // 助力/负重动作实时换算有效对抗重量
+                        val effective = if (bodyWeightKg > 0f && (state.exercise.isAssisted || state.exercise.isWeighted)) {
+                            state.exercise.effectiveWeight(bodyWeightKg, s.weight)
+                        } else null
+                        SetRow(i + 1, s, state.actualSets.size > 1, weightUnit, effective, { onToggleSetCompleted(i) }, { onRepsChanged(i, it) }, { onWeightChanged(i, it) }, { onRemoveSet(i) })
                     }
                     Row(Modifier.fillMaxWidth().clickable(onClick = onAddSet).padding(vertical = 6.dp), horizontalArrangement = Arrangement.Center) {
                         Icon(Icons.Filled.Add, null, Modifier.size(16.dp), tint = MediumGray)
@@ -528,7 +604,7 @@ private fun PrevBest(label: String, weight: Float?, reps: Int?, hasData: Boolean
 }
 
 @Composable
-private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, unit: String, onToggle: () -> Unit, onReps: (Int) -> Unit, onWeight: (Float) -> Unit, onRemove: () -> Unit) {
+private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, unit: String, effectiveWeight: Float?, onToggle: () -> Unit, onReps: (Int) -> Unit, onWeight: (Float) -> Unit, onRemove: () -> Unit) {
     val checkScale by animateFloatAsState(
         targetValue = if (s.completed) 1f else 0.3f,
         animationSpec = spring(dampingRatio = AnimationConfig.CheckMark.scaleDamping, stiffness = AnimationConfig.CheckMark.scaleStiffness),
@@ -556,9 +632,22 @@ private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, unit: String, onTog
         Text("${s.reps} 次", fontWeight = FontWeight.Bold, color = DarkBg, modifier = Modifier.width(50.dp))
         Text("+", Modifier.clickable { if (s.reps < 99) onReps(s.reps + 1) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = DarkBg)
         Spacer(Modifier.width(8.dp))
-        Text("−", Modifier.clickable { if (s.weight > 0f) onWeight((s.weight - 2.5f).coerceAtLeast(0f)) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = if (s.weight > 0f) DarkBg else MediumGray.copy(alpha = 0.3f))
-        Text(if (s.weight > 0f) "${formatWeight(s.weight)} $unit" else "— $unit", fontWeight = FontWeight.Bold, color = if (s.weight > 0f) AccentGreen else MediumGray, modifier = Modifier.width(48.dp))
-        Text("+", Modifier.clickable { if (s.weight < 500f) onWeight((s.weight + 2.5f).coerceAtMost(500f)) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = DarkBg)
+        // 重量输入列：助力/负重动作下方实时显示换算后的实际对抗重量
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("−", Modifier.clickable { if (s.weight > 0f) onWeight((s.weight - 2.5f).coerceAtLeast(0f)) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = if (s.weight > 0f) DarkBg else MediumGray.copy(alpha = 0.3f))
+                Text(if (s.weight > 0f) "${formatWeight(s.weight)} $unit" else "— $unit", fontWeight = FontWeight.Bold, color = if (s.weight > 0f) AccentGreen else MediumGray, modifier = Modifier.width(48.dp))
+                Text("+", Modifier.clickable { if (s.weight < 500f) onWeight((s.weight + 2.5f).coerceAtMost(500f)) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = DarkBg)
+            }
+            if (effectiveWeight != null && s.weight > 0f) {
+                Text(
+                    "${LocaleStrings.effectiveWeightShort} ${formatWeight(effectiveWeight)} $unit",
+                    fontSize = 10.sp,
+                    color = AccentOrange,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
         if (canRemove) IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) { Icon(Icons.Filled.Remove, null, Modifier.size(14.dp), tint = MediumGray) }
     }
 }

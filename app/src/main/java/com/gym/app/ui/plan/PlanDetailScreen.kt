@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -42,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -63,18 +66,25 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.gym.app.data.entity.Exercise
+import com.gym.app.ui.components.CreateCustomExerciseDialog
+import com.gym.app.ui.components.ExerciseGifImage
 import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
 import com.gym.app.ui.components.pressEffect
 import com.gym.app.ui.components.PlanTrendCard
 import com.gym.app.ui.components.TrendPoint
+import com.gym.app.ui.components.WeightModeBadge
+import com.gym.app.ui.components.WeightModeSelectorRow
 import com.gym.app.ui.exercise.ExerciseListViewModel
 import coil.compose.AsyncImage
 import androidx.compose.foundation.layout.aspectRatio
@@ -83,12 +93,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import android.content.Intent
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val AccentGreen = Color(0xFF4CAF50)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
@@ -110,9 +121,19 @@ fun PlanDetailScreen(
     // 动作详情面板
     var selectedDetailExercise by remember { mutableStateOf<Exercise?>(null) }
 
+    // 创建自定义动作对话框（编辑模式搜索无结果入口）
+    var showCreateCustom by remember { mutableStateOf(false) }
+
     // 保存成功弹窗
     var showSavedSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // 分享计划弹层
+    var showShareSheet by remember { mutableStateOf(false) }
+    var shareString by remember { mutableStateOf<String?>(null) }
+    var shareCopied by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
 
     if (showSavedSheet) {
         ModalBottomSheet(
@@ -139,7 +160,7 @@ fun PlanDetailScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "动作列表和顺序已更新",
+                    "动作列表、顺序和名称已更新",
                     fontSize = 14.sp,
                     color = MediumGray,
                 )
@@ -152,6 +173,81 @@ fun PlanDetailScreen(
                 ) {
                     Text("返回计划列表", fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+    }
+
+    // 分享计划弹层：字符串 + 复制 + 系统分享
+    if (showShareSheet && shareString != null) {
+        ModalBottomSheet(
+            onDismissRequest = { showShareSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = WhiteColor,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    LocaleStrings.sharePlan,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkBg,
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    LocaleStrings.sharePlanHint,
+                    fontSize = 13.sp,
+                    color = MediumGray,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 110.dp)
+                        .verticalScroll(rememberScrollState())
+                        .background(LightGray, RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                ) {
+                    Text(
+                        shareString!!,
+                        fontSize = 12.sp,
+                        color = DarkBg,
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = {
+                            clipboard.setText(AnnotatedString(shareString!!))
+                            shareCopied = true
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
+                    ) {
+                        Text(
+                            if (shareCopied) LocaleStrings.copied else LocaleStrings.copy,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, shareString)
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, LocaleStrings.sharePlan))
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
+                    ) {
+                        Text(LocaleStrings.shareToFriends, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
@@ -174,6 +270,15 @@ fun PlanDetailScreen(
                 },
                 actions = {
                     if (!isEditing) {
+                        IconButton(onClick = {
+                            shareString = viewModel.buildShareString()
+                            if (shareString != null) {
+                                shareCopied = false
+                                showShareSheet = true
+                            }
+                        }) {
+                            Icon(Icons.Filled.Share, contentDescription = LocaleStrings.sharePlan, tint = WhiteColor)
+                        }
                         IconButton(onClick = {
                             viewModel.deletePlan { onBack() }
                         }) {
@@ -213,15 +318,30 @@ fun PlanDetailScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // 计划名称 + 元信息
+            // 计划名称 + 元信息（编辑模式下名称可修改，保存时一起持久化）
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Text(
-                    uiState.planName,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkBg,
-                )
-                if (!isEditing) {
+                if (isEditing) {
+                    TextField(
+                        value = uiState.planName,
+                        onValueChange = viewModel::onPlanNameChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(LocaleStrings.planName, fontSize = 13.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = WhiteColor,
+                            unfocusedContainerColor = WhiteColor,
+                            focusedIndicatorColor = AccentOrange,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                    )
+                } else {
+                    Text(
+                        uiState.planName,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkBg,
+                    )
                     val dateStr = if (uiState.createdDate > 0) {
                         val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
                         sdf.format(Date(uiState.createdDate))
@@ -254,6 +374,7 @@ fun PlanDetailScreen(
                         onRemove = { viewModel.removeExercise(index) },
                         onSetsChanged = { viewModel.updateSets(index, it) },
                         onRepsChanged = { viewModel.updateReps(index, it) },
+                        onWeightModeChanged = { mode -> viewModel.updateWeightMode(index, mode) },
                         onMoveUp = {
                             if (index > 0) viewModel.moveItem(index, index - 1)
                         },
@@ -306,6 +427,29 @@ fun PlanDetailScreen(
                         }
                     }
 
+                    // 搜索无结果 → 创建自定义动作入口（与图片导入未匹配动作的支持一致）
+                    if (uiState.isSearching && uiState.searchResults.isEmpty()) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(LocaleStrings.noResults, color = MediumGray, fontSize = 14.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                TextButton(onClick = { showCreateCustom = true }) {
+                                    Text(
+                                        LocaleStrings.createCustomFromLibrary.replace("{0}", uiState.searchQuery.trim()),
+                                        color = AccentOrange,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     if (!uiState.isSearching && uiState.exercises.isEmpty()) {
                         item {
                             Text(
@@ -352,6 +496,18 @@ fun PlanDetailScreen(
                 ExerciseDetailSheetContent(exercise = selectedDetailExercise!!)
             }
         }
+
+        // 创建自定义动作对话框（编辑模式搜索无结果入口）
+        if (showCreateCustom) {
+            CreateCustomExerciseDialog(
+                initialName = uiState.searchQuery.trim(),
+                onConfirm = { name ->
+                    viewModel.createCustomExercise(name)
+                    showCreateCustom = false
+                },
+                onDismiss = { showCreateCustom = false },
+            )
+        }
     } // Box 结束
 }
 
@@ -371,6 +527,7 @@ private fun ExerciseItemCard(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onExerciseClick: (Exercise) -> Unit = {},
+    onWeightModeChanged: (Int) -> Unit = {},
 ) {
     Card(
         modifier = Modifier
@@ -397,27 +554,35 @@ private fun ExerciseItemCard(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // GIF 缩略图
+            // GIF 缩略图（自定义动作显示占位图标）
             if (item.exercise != null) {
-                AsyncImage(
-                    model = "file:///android_asset/${item.exercise.gifPath}",
-                    contentDescription = item.name,
+                ExerciseGifImage(
+                    exercise = item.exercise,
                     modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)),
                     contentScale = ContentScale.Crop,
+                    placeholderIconSize = 18.dp,
                 )
                 Spacer(modifier = Modifier.width(10.dp))
             }
 
             // 名称 + 组数次
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    item.name,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkBg,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        item.name,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkBg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    // 查看模式：助力/负重只读标签
+                    if (!isEditing && item.exercise != null && (item.exercise.isAssisted || item.exercise.isWeighted)) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        WeightModeBadge(item.exercise.weightMode)
+                    }
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isEditing) {
@@ -432,6 +597,14 @@ private fun ExerciseItemCard(
                         )
                     }
                 }
+                // 编辑模式：重量记录方式三态切换（普通/助力/负重）
+                if (isEditing && item.exercise != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    WeightModeSelectorRow(
+                        currentMode = item.exercise.weightMode,
+                        onModeChanged = onWeightModeChanged,
+                    )
+                }
             }
 
             if (isEditing) {
@@ -442,14 +615,14 @@ private fun ExerciseItemCard(
                         modifier = Modifier.size(28.dp),
                         enabled = number > 1,
                     ) {
-                        Icon(Icons.Filled.ExpandLess, "上移", Modifier.size(18.dp), tint = if (number > 1) AccentBlue else MediumGray.copy(alpha = 0.3f))
+                        Icon(Icons.Filled.ExpandLess, "上移", Modifier.size(18.dp), tint = if (number > 1) AccentOrange else MediumGray.copy(alpha = 0.3f))
                     }
                     IconButton(
                         onClick = onMoveDown,
                         modifier = Modifier.size(28.dp),
                         enabled = number < totalCount,
                     ) {
-                        Icon(Icons.Filled.ExpandMore, "下移", Modifier.size(18.dp), tint = if (number < totalCount) AccentBlue else MediumGray.copy(alpha = 0.3f))
+                        Icon(Icons.Filled.ExpandMore, "下移", Modifier.size(18.dp), tint = if (number < totalCount) AccentOrange else MediumGray.copy(alpha = 0.3f))
                     }
                 }
                 IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
@@ -472,7 +645,7 @@ private fun Stepper(value: Int, onChanged: (Int) -> Unit, label: String) {
             modifier = Modifier.clickable { if (value > 1) onChanged(value - 1) }.padding(horizontal = 5.dp),
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
-            color = if (value > 1) AccentBlue else MediumGray.copy(alpha = 0.3f),
+            color = if (value > 1) AccentOrange else MediumGray.copy(alpha = 0.3f),
         )
         Text("$value", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = DarkBg)
         Text(
@@ -480,7 +653,7 @@ private fun Stepper(value: Int, onChanged: (Int) -> Unit, label: String) {
             modifier = Modifier.clickable { if (value < 99) onChanged(value + 1) }.padding(horizontal = 5.dp),
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
-            color = if (value < 99) AccentBlue else MediumGray.copy(alpha = 0.3f),
+            color = if (value < 99) AccentOrange else MediumGray.copy(alpha = 0.3f),
         )
         Text(" $label", fontSize = 12.sp, color = MediumGray)
     }
@@ -501,11 +674,11 @@ private fun SearchAddItem(exercise: Exercise, isAdded: Boolean, onAdd: () -> Uni
             modifier = Modifier.fillMaxWidth().padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AsyncImage(
-                model = "file:///android_asset/${exercise.gifPath}",
-                contentDescription = exercise.displayName,
+            ExerciseGifImage(
+                exercise = exercise,
                 modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)),
                 contentScale = ContentScale.Crop,
+                placeholderIconSize = 16.dp,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -518,15 +691,16 @@ private fun SearchAddItem(exercise: Exercise, isAdded: Boolean, onAdd: () -> Uni
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${ExerciseListViewModel.bodyPartLabel(exercise.bodyPart)} · ${ExerciseListViewModel.equipmentLabel(exercise.equipment)}",
+                    if (exercise.isCustom) LocaleStrings.customBadge
+                    else "${ExerciseListViewModel.bodyPartLabel(exercise.bodyPart)} · ${ExerciseListViewModel.equipmentLabel(exercise.equipment)}",
                     fontSize = 11.sp,
-                    color = MediumGray,
+                    color = if (exercise.isCustom) AccentOrange else MediumGray,
                 )
             }
             if (isAdded) {
                 Text("已添加", fontSize = 12.sp, color = AccentGreen, fontWeight = FontWeight.Medium)
             } else {
-                Icon(Icons.Filled.Add, "添加", tint = AccentBlue, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Add, "添加", tint = AccentOrange, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -566,53 +740,79 @@ private fun ExerciseDetailSheetContent(exercise: Exercise) {
             .verticalScroll(rememberScrollState()),
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f).background(Color.Black),
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(if (exercise.isCustom) 1.4f else 1f)
+                .background(Color.Black),
             contentAlignment = Alignment.Center,
         ) {
-            AsyncImage(
-                model = "file:///android_asset/${exercise.gifPath}",
-                contentDescription = exercise.displayName,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit,
-            )
+            if (exercise.isCustom) {
+                Icon(
+                    Icons.Filled.FitnessCenter,
+                    contentDescription = exercise.displayName,
+                    tint = WhiteColor.copy(alpha = 0.5f),
+                    modifier = Modifier.size(56.dp),
+                )
+            } else {
+                AsyncImage(
+                    model = "file:///android_asset/${exercise.gifPath}",
+                    contentDescription = exercise.displayName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+            }
             Box(
                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.5f)).padding(16.dp),
             ) {
                 Column {
                     Text(exercise.displayName, color = WhiteColor, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(exercise.name, color = WhiteColor.copy(alpha = 0.6f), fontSize = 13.sp)
+                    if (exercise.isCustom) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(LocaleStrings.customBadge, color = AccentOrange, fontSize = 13.sp)
+                    } else {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(exercise.name, color = WhiteColor.copy(alpha = 0.6f), fontSize = 13.sp)
+                    }
                 }
             }
         }
         Column(modifier = Modifier.fillMaxWidth().background(WhiteColor).padding(16.dp)) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TagChip(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), AccentBlue)
-                TagChip(ExerciseListViewModel.targetLabel(exercise.target), OrangeColor)
-                TagChip(ExerciseListViewModel.equipmentLabel(exercise.equipment), Color(0xFF26A69A))
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-            Text("步骤指导", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg)
-            Spacer(modifier = Modifier.height(16.dp))
-            if (steps.isNotEmpty()) {
-                steps.forEachIndexed { index, step ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Box(
-                            modifier = Modifier.size(24.dp).clip(CircleShape).background(DarkBg),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("${index + 1}", color = WhiteColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(step.trim(), fontSize = 14.sp, color = DarkBg, lineHeight = 22.sp, modifier = Modifier.weight(1f))
-                    }
+            if (exercise.isCustom) {
+                // 自定义动作：无标签、无要点
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LightGray).padding(16.dp),
+                ) {
+                    Text(LocaleStrings.customNoInstructions, color = DarkBg, lineHeight = 24.sp)
                 }
             } else {
-                Text(exercise.instructionsZh, color = DarkBg, lineHeight = 24.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TagChip(ExerciseListViewModel.bodyPartLabel(exercise.bodyPart), AccentOrange)
+                    TagChip(ExerciseListViewModel.targetLabel(exercise.target), OrangeColor)
+                    TagChip(ExerciseListViewModel.equipmentLabel(exercise.equipment), Color(0xFF26A69A))
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+                Text("步骤指导", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg)
+                Spacer(modifier = Modifier.height(16.dp))
+                if (steps.isNotEmpty()) {
+                    steps.forEachIndexed { index, step ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Box(
+                                modifier = Modifier.size(24.dp).clip(CircleShape).background(DarkBg),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("${index + 1}", color = WhiteColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(step.trim(), fontSize = 14.sp, color = DarkBg, lineHeight = 22.sp, modifier = Modifier.weight(1f))
+                        }
+                    }
+                } else {
+                    Text(exercise.instructionsZh, color = DarkBg, lineHeight = 24.sp)
+                }
             }
         }
         Spacer(modifier = Modifier.height(24.dp))

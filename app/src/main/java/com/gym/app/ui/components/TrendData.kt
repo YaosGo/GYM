@@ -34,19 +34,32 @@ data class ProgressResult(
     val isFirstTime: Boolean get() = previousMaxWeight == 0f && previousMaxReps == 0
 }
 
+/**
+ * 解析记录的有效对抗重量列表（与组一一对应）。
+ * 助力=体重−助力值，负重=体重+附加重；无有效重量数据时回退到原始 weight（兼容旧记录）。
+ */
+fun parseEffectiveWeights(record: ExerciseRecord): List<Float> {
+    val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+    val type = Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
+    val effective = try {
+        moshi.adapter<List<Float>>(type).fromJson(record.effectiveWeight) ?: emptyList()
+    } catch (_: Exception) { emptyList() }
+    if (effective.isNotEmpty()) return effective
+    return try {
+        moshi.adapter<List<Float>>(type).fromJson(record.weight) ?: emptyList()
+    } catch (_: Exception) { emptyList() }
+}
+
 /** 从 ExerciseRecord 列表提取趋势数据点 */
 fun extractTrendPoints(records: List<ExerciseRecord>, dates: List<String>): List<TrendPoint> {
     val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
     val intListType = Types.newParameterizedType(List::class.java, Int::class.javaObjectType)
-    val floatListType = Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
 
     return records.mapIndexed { index, record ->
         val repsList: List<Int> = try {
             moshi.adapter<List<Int>>(intListType).fromJson(record.actualReps) ?: emptyList()
         } catch (_: Exception) { emptyList() }
-        val weightList: List<Float> = try {
-            moshi.adapter<List<Float>>(floatListType).fromJson(record.weight) ?: emptyList()
-        } catch (_: Exception) { emptyList() }
+        val weightList = parseEffectiveWeights(record)
 
         val maxWeight = weightList.maxOrNull() ?: 0f
         val maxReps = repsList.maxOrNull() ?: 0
@@ -100,12 +113,7 @@ fun calculateProgress(
 }
 
 private fun parseMaxWeight(record: ExerciseRecord): Float {
-    return try {
-        val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
-        val type = Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
-        val list = moshi.adapter<List<Float>>(type).fromJson(record.weight) ?: emptyList()
-        list.maxOrNull() ?: 0f
-    } catch (_: Exception) { 0f }
+    return parseEffectiveWeights(record).maxOrNull() ?: 0f
 }
 
 private fun parseMaxReps(record: ExerciseRecord): Int {
@@ -121,9 +129,8 @@ private fun parseTotalVolume(record: ExerciseRecord): Float {
     return try {
         val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
         val intType = Types.newParameterizedType(List::class.java, Int::class.javaObjectType)
-        val floatType = Types.newParameterizedType(List::class.java, Float::class.javaObjectType)
         val repsList = moshi.adapter<List<Int>>(intType).fromJson(record.actualReps) ?: emptyList()
-        val weightList = moshi.adapter<List<Float>>(floatType).fromJson(record.weight) ?: emptyList()
+        val weightList = parseEffectiveWeights(record)
         repsList.zip(weightList).sumOf { (r, w) -> (r * w).toDouble() }.toFloat()
     } catch (_: Exception) { 0f }
 }

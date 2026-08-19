@@ -60,9 +60,10 @@ import com.gym.app.ui.components.displayName
 import com.gym.app.ui.components.TrendPoint
 import com.gym.app.ui.components.calculateProgress
 import com.gym.app.ui.components.extractTrendPoints
+import com.gym.app.ui.components.parseEffectiveWeights
 
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val AccentGreen = Color(0xFF4CAF50)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
@@ -74,6 +75,7 @@ private data class SessionDetailData(
     val records: List<ExerciseRecord>,
     val previousRecords: List<ExerciseRecord>,
     val exerciseNames: Map<String, String>,
+    val exerciseWeightModes: Map<String, Int>,
     val exerciseHistories: Map<String, List<TrendPoint>>,
     val progressMap: Map<String, ProgressResult>,
 )
@@ -98,9 +100,13 @@ fun SessionDetailScreen(
             val planId = session.planId
             val records = workoutRepository.getRecordsBySessionId(sessionId)
             val names = mutableMapOf<String, String>()
+            val weightModes = mutableMapOf<String, Int>()
             records.forEach { r ->
                 val ex = exerciseRepository.getExerciseById(r.exerciseId)
-                if (ex != null) names[r.exerciseId] = ex.displayName
+                if (ex != null) {
+                    names[r.exerciseId] = ex.displayName
+                    weightModes[r.exerciseId] = ex.weightMode
+                }
             }
 
             // 查询历史趋势数据（仅包含当前 session 及之前的训练）
@@ -135,6 +141,7 @@ fun SessionDetailScreen(
                 records = records,
                 previousRecords = previousRecords,
                 exerciseNames = names,
+                exerciseWeightModes = weightModes,
                 exerciseHistories = histories,
                 progressMap = progressMap,
             )
@@ -191,7 +198,7 @@ fun SessionDetailScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator(color = AccentBlue)
+                CircularProgressIndicator(color = AccentOrange)
             }
         } else if (detail != null) {
             val d = detail!!
@@ -240,6 +247,15 @@ fun SessionDetailScreen(
                                 fontSize = 14.sp,
                                 color = MediumGray,
                             )
+                            if (d.session.bodyWeightKg > 0f) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    // 体重快照界面单位为斤（存储为 kg）
+                                    "${LocaleStrings.weightInfo} ${formatWeightKg(d.session.bodyWeightKg * 2f)} ${LocaleStrings.weightUnitJin}",
+                                    fontSize = 13.sp,
+                                    color = AccentOrange,
+                                )
+                            }
                         }
                     }
                 }
@@ -257,6 +273,7 @@ fun SessionDetailScreen(
                         currentVolume = lastPt?.totalVolume ?: 0f,
                         currentSets = lastPt?.sets ?: record.actualSets,
                         currentReps = lastPt?.maxReps ?: 0,
+                        weightMode = d.exerciseWeightModes[record.exerciseId] ?: 0,
                     )
                 }
 
@@ -287,9 +304,13 @@ fun SessionDetailScreenContent(
             val planId = session.planId
             val records = workoutRepository.getRecordsBySessionId(sessionId)
             val names = mutableMapOf<String, String>()
+            val weightModes = mutableMapOf<String, Int>()
             records.forEach { r ->
                 val ex = exerciseRepository.getExerciseById(r.exerciseId)
-                if (ex != null) names[r.exerciseId] = ex.displayName
+                if (ex != null) {
+                    names[r.exerciseId] = ex.displayName
+                    weightModes[r.exerciseId] = ex.weightMode
+                }
             }
             // 查询历史趋势数据（仅包含当前 session 及之前的训练）
             val histories = mutableMapOf<String, List<TrendPoint>>()
@@ -312,7 +333,7 @@ fun SessionDetailScreenContent(
             val progressResults = calculateProgress(records, previousRecords, names)
             val progressMap = progressResults.associateBy { it.exerciseId }
 
-            detail = SessionDetailData(session, plan?.name ?: "Workout", records, previousRecords, names, histories, progressMap)
+            detail = SessionDetailData(session, plan?.name ?: "Workout", records, previousRecords, names, weightModes, histories, progressMap)
         }
         isLoading = false
     }
@@ -326,7 +347,7 @@ fun SessionDetailScreenContent(
     ) {
         if (isLoading) {
             Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AccentBlue)
+                CircularProgressIndicator(color = AccentOrange)
             }
         } else if (detail != null) {
             val d = detail!!
@@ -336,7 +357,7 @@ fun SessionDetailScreenContent(
                     Text("✅", fontSize = 48.sp)
                     Spacer(Modifier.height(8.dp))
                     Text("训练完成！", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = DarkBg)
-                    Text(d.planName, fontSize = 14.sp, color = AccentBlue)
+                    Text(d.planName, fontSize = 14.sp, color = AccentOrange)
                 }
             }
             // 统计
@@ -345,6 +366,10 @@ fun SessionDetailScreenContent(
                 StatLabel("动作数", "${d.records.size}")
                 StatLabel("总组数", "${d.records.sumOf { it.actualSets }}")
                 StatLabel("总重量", formatTotalWeight(d.records))
+                if (d.session.bodyWeightKg > 0f) {
+                    // 体重快照界面单位为斤（存储为 kg）
+                    StatLabel(LocaleStrings.weightInfo, "${formatWeightKg(d.session.bodyWeightKg * 2f)} ${LocaleStrings.weightUnitJin}")
+                }
             }
             // 动作详情
             Text("动作详情", fontWeight = FontWeight.Bold, color = DarkBg, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
@@ -382,7 +407,7 @@ fun SessionDetailScreenContent(
 @Composable
 private fun StatLabel(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = AccentBlue)
+        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = AccentOrange)
         Text(label, fontSize = 11.sp, color = MediumGray)
     }
 }
@@ -394,13 +419,18 @@ private fun formatFullDuration(totalSeconds: Int): String {
 
 private fun formatTotalWeight(records: List<ExerciseRecord>): String {
     val total = records.sumOf { record ->
-        val weights = parseFloatArray(record.weight)
+        // 有效对抗重量：助力=体重−助力值，负重=体重+附加重（旧数据回退 weight）
+        val weights = parseEffectiveWeights(record)
         val reps = parseIntArray(record.actualReps)
         if (weights.size == reps.size) weights.zip(reps).sumOf { (w, r) -> (w.toDouble() * r).toDouble() }
         else 0.0
     }.toFloat()
     return formatTons(total)
 }
+
+private fun formatWeightKg(w: Float): String =
+    if (w == w.toInt().toFloat()) w.toInt().toString()
+    else java.text.DecimalFormat("#.#").format(w.toDouble())
 
 private fun formatTons(t: Float): String {
     val v = t.toDouble()

@@ -91,6 +91,14 @@ class CreatePlanViewModel(
         _searchQuery.value = ""
     }
 
+    /** 搜索无结果时创建自定义动作并直接加入已选列表。 */
+    fun createCustomExercise(name: String) {
+        viewModelScope.launch {
+            val exercise = exerciseRepository.createCustomExercise(name)
+            addExercise(exercise)
+        }
+    }
+
     fun removeExercise(exerciseId: String) {
         _selectedExercises.value = _selectedExercises.value.filter { it.exercise.id != exerciseId }
     }
@@ -104,6 +112,16 @@ class CreatePlanViewModel(
     fun updateExerciseReps(exerciseId: String, reps: Int) {
         _selectedExercises.value = _selectedExercises.value.map {
             if (it.exercise.id == exerciseId) it.copy(targetReps = reps) else it
+        }
+    }
+
+    /** 更新动作的重量记录方式（普通/助力/负重），乐观更新界面 + 异步写库。 */
+    fun updateExerciseWeightMode(exerciseId: String, mode: Int) {
+        _selectedExercises.value = _selectedExercises.value.map {
+            if (it.exercise.id == exerciseId) it.copy(exercise = it.exercise.copy(weightMode = mode)) else it
+        }
+        viewModelScope.launch {
+            exerciseRepository.updateWeightMode(exerciseId, mode)
         }
     }
 

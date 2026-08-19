@@ -97,10 +97,10 @@ private val GymShapes = Shapes(
 // ── Color Schemes ──
 
 private val LightColorScheme = lightColorScheme(
-    primary = Blue700,
+    primary = CatOrangeDark,
     onPrimary = Gray50,
-    primaryContainer = Blue200,
-    secondary = Orange500,
+    primaryContainer = CatOrangeLight,
+    secondary = AccentOrangeRed,
     onSecondary = Gray50,
     background = Gray50,
     surface = Gray50,
@@ -110,10 +110,10 @@ private val LightColorScheme = lightColorScheme(
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Blue200,
+    primary = CatOrangeLight,
     onPrimary = Gray900,
-    primaryContainer = Blue700,
-    secondary = Orange500,
+    primaryContainer = CatOrangeDark,
+    secondary = AccentOrangeRed,
     onSecondary = Gray900,
     background = Gray900,
     surface = Gray900,

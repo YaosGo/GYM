@@ -34,4 +34,43 @@ class ExerciseRepository(private val exerciseDao: ExerciseDao) {
     fun getAllEquipments(): Flow<List<String>> = exerciseDao.getAllEquipments()
 
     suspend fun getCount(): Int = exerciseDao.getCount()
+
+    /** 更新动作的重量模式（助力/负重手动标记）。 */
+    suspend fun updateWeightMode(id: String, weightMode: Int) =
+        exerciseDao.updateWeightMode(id, weightMode)
+
+    /**
+     * 创建自定义动作（无 GIF/要点），写入动作库后可在计划/训练中复用。
+     * id 以 custom_ 前缀避免与数据集动作（exercises.json）冲突；
+     * 连续快速创建时时间戳可能同毫秒，循环保证 id 唯一（批量导入场景）。
+     */
+    suspend fun createCustomExercise(name: String): Exercise {
+        val trimmed = name.trim()
+        val exercise = Exercise(
+            id = uniqueCustomId(),
+            name = trimmed,
+            category = "",
+            bodyPart = "",
+            equipment = "",
+            instructionsZh = "",
+            instructionStepsZh = "[]",
+            muscleGroup = "",
+            secondaryMuscles = "[]",
+            target = "",
+            imagePath = "",
+            gifPath = "",
+            nameZh = trimmed,
+            isCustom = true,
+        )
+        exerciseDao.insertExercise(exercise)
+        return exercise
+    }
+
+    private suspend fun uniqueCustomId(): String {
+        var id: String
+        do {
+            id = "custom_" + System.currentTimeMillis()
+        } while (exerciseDao.getExerciseById(id) != null)
+        return id
+    }
 }

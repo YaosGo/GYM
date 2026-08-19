@@ -48,4 +48,8 @@ data class WorkoutSession(
     /** 训练备注 */
     @ColumnInfo(name = "note")
     val note: String = "",
+
+    /** 训练开始时的体重快照（kg），用于助力/负重动作的有效重量换算；0 表示未记录 */
+    @ColumnInfo(name = "body_weight_kg")
+    val bodyWeightKg: Float = 0f,
 )

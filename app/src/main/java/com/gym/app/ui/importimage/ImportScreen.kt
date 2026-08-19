@@ -24,11 +24,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -45,6 +47,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
@@ -67,18 +71,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.gym.app.data.entity.Exercise
+import com.gym.app.ui.components.CreateCustomExerciseDialog
+import com.gym.app.ui.components.ExerciseGifImage
+import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
 import com.gym.app.ui.components.displayName
+import com.gym.app.ui.exercise.ExerciseListViewModel
 import java.text.DecimalFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-private val DarkBg = Color(0xFF1A1A2E)
+private val DarkBg = Color(0xFF3E2E23)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
-private val AccentBlue = Color(0xFF2196F3)
+private val AccentOrange = Color(0xFFF2994A)
 private val AccentGreen = Color(0xFF4CAF50)
 private val OrangeColor = Color(0xFFFF7043)
 private val ErrorRed = Color(0xFFC62828)
@@ -192,7 +201,7 @@ private fun EmptyState(onPickImage: () -> Unit) {
             onClick = onPickImage,
             modifier = Modifier.height(48.dp),
             shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
         ) {
             Text(
                 LocaleStrings.importSelectImage,
@@ -224,7 +233,7 @@ private fun RecognizingState(imageUri: String?) {
                 .clip(RoundedCornerShape(14.dp)),
         )
         Spacer(modifier = Modifier.height(20.dp))
-        CircularProgressIndicator(color = AccentBlue)
+        CircularProgressIndicator(color = AccentOrange)
         Spacer(modifier = Modifier.height(12.dp))
         Text(LocaleStrings.importRecognizing, fontSize = 14.sp, color = MediumGray)
     }
@@ -259,13 +268,13 @@ private fun ErrorState(
         Spacer(modifier = Modifier.height(24.dp))
         Row {
             OutlinedButton(onClick = onRetry) {
-                Text(LocaleStrings.importRetry, color = AccentBlue)
+                Text(LocaleStrings.importRetry, color = AccentOrange)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Button(
                 onClick = onPickImage,
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
             ) {
                 Text(LocaleStrings.importChangeImage, color = WhiteColor)
             }
@@ -285,6 +294,12 @@ private fun ReviewContent(
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
 
+    // 未匹配动作处理面板状态（选项 / 搜索映射 / 创建自定义）
+    var handleIndex by remember { mutableStateOf<Int?>(null) }
+    var searchIndex by remember { mutableStateOf<Int?>(null) }
+    var createIndex by remember { mutableStateOf<Int?>(null) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
@@ -307,7 +322,7 @@ private fun ReviewContent(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     OutlinedButton(onClick = onPickImage) {
-                        Text(LocaleStrings.importChangeImage, color = AccentBlue)
+                        Text(LocaleStrings.importChangeImage, color = AccentOrange)
                     }
                 }
             }
@@ -347,13 +362,13 @@ private fun ReviewContent(
                                 uiState.date,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = AccentBlue,
+                                color = AccentOrange,
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Icon(
                                 Icons.Filled.CalendarMonth,
                                 contentDescription = LocaleStrings.importDateLabel,
-                                tint = AccentBlue,
+                                tint = AccentOrange,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
@@ -439,8 +454,8 @@ private fun ReviewContent(
                 items(unmatchedIndices, key = { it }) { index ->
                     UnmatchedCard(
                         item = uiState.exercises[index],
-                        index = index,
-                        viewModel = viewModel,
+                        onHandle = { handleIndex = index },
+                        onSkip = { viewModel.removeExercise(index) },
                     )
                 }
             }
@@ -499,7 +514,86 @@ private fun ReviewContent(
                 }
             }
         }
+    } // Column 结束
+
+    // ── 未匹配动作：选项面板 ──
+    handleIndex?.let { index ->
+        val item = uiState.exercises.getOrNull(index)
+        if (item != null) {
+            FrostedBottomSheet(
+                visible = true,
+                onDismiss = { handleIndex = null },
+                sheetHeightFraction = 0.42f,
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+                    Text(
+                        item.rawName.ifBlank { LocaleStrings.importUnknownName },
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkBg,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        LocaleStrings.importUnmatchedBadge,
+                        fontSize = 12.sp,
+                        color = OrangeColor,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OptionRow(
+                        icon = { Icon(Icons.Filled.Search, null, tint = AccentOrange, modifier = Modifier.size(20.dp)) },
+                        title = LocaleStrings.importSearchLibrary,
+                    ) {
+                        searchIndex = index
+                        handleIndex = null
+                    }
+                    OptionRow(
+                        icon = { Icon(Icons.Filled.Add, null, tint = OrangeColor, modifier = Modifier.size(20.dp)) },
+                        title = LocaleStrings.importCreateCustom,
+                    ) {
+                        createIndex = index
+                        handleIndex = null
+                    }
+                }
+            }
+        }
     }
+
+    // ── 未匹配动作：搜索动作库映射 ──
+    searchIndex?.let { index ->
+        FrostedBottomSheet(
+            visible = true,
+            onDismiss = { searchIndex = null },
+            sheetHeightFraction = 0.9f,
+        ) {
+            ExerciseSearchSheetContent(
+                viewModel = viewModel,
+                onExercisePicked = { exercise ->
+                    viewModel.mapExercise(index, exercise)
+                    searchIndex = null
+                },
+                onCreateCustom = {
+                    createIndex = index
+                    searchIndex = null
+                },
+            )
+        }
+    }
+
+    // ── 未匹配动作：创建自定义动作对话框 ──
+    createIndex?.let { index ->
+        val item = uiState.exercises.getOrNull(index)
+        if (item != null) {
+            CreateCustomExerciseDialog(
+                initialName = item.rawName,
+                onConfirm = { name ->
+                    viewModel.createCustomExerciseFor(index, name)
+                    createIndex = null
+                },
+                onDismiss = { createIndex = null },
+            )
+        }
+    }
+    } // Box 结束
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
@@ -513,7 +607,7 @@ private fun ReviewContent(
                         viewModel.updateDate(millis.toDateString())
                     }
                     showDatePicker = false
-                }) { Text(LocaleStrings.confirm, color = AccentBlue) }
+                }) { Text(LocaleStrings.confirm, color = AccentOrange) }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
@@ -545,9 +639,8 @@ private fun ExerciseImportCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val exercise = item.exercise
                 if (exercise != null) {
-                    AsyncImage(
-                        model = "file:///android_asset/${exercise.gifPath}",
-                        contentDescription = null,
+                    ExerciseGifImage(
+                        exercise = exercise,
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(8.dp)),
@@ -570,6 +663,15 @@ private fun ExerciseImportCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (exercise?.isCustom == true) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        LocaleStrings.customBadge,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = AccentOrange,
+                    )
+                }
                 IconButton(onClick = { viewModel.removeExercise(index) }) {
                     Icon(
                         Icons.Filled.DeleteOutline,
@@ -620,8 +722,8 @@ private fun ExerciseImportCard(
 @Composable
 private fun UnmatchedCard(
     item: ImportExerciseState,
-    index: Int,
-    viewModel: ImportViewModel,
+    onHandle: () -> Unit,
+    onSkip: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -632,14 +734,15 @@ private fun UnmatchedCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onHandle)
                 .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    item.rawName.ifBlank { "未识别动作" },
+                    item.rawName.ifBlank { LocaleStrings.importUnknownName },
                     fontSize = 14.sp,
-                    color = MediumGray,
+                    color = DarkBg,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -649,13 +752,135 @@ private fun UnmatchedCard(
                     color = OrangeColor,
                 )
             }
-            IconButton(onClick = { viewModel.removeExercise(index) }) {
+            IconButton(onClick = onSkip) {
                 Icon(
                     Icons.Filled.DeleteOutline,
-                    contentDescription = LocaleStrings.removeExercise,
+                    contentDescription = LocaleStrings.importSkip,
                     tint = MediumGray,
                     modifier = Modifier.size(20.dp),
                 )
+            }
+        }
+    }
+}
+
+/** 选项面板中的一行操作项。 */
+@Composable
+private fun OptionRow(
+    icon: @Composable () -> Unit,
+    title: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        icon()
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = DarkBg)
+    }
+}
+
+/** 搜索动作库面板：输入关键词过滤，点击结果完成映射；无结果时可创建自定义动作。 */
+@Composable
+private fun ExerciseSearchSheetContent(
+    viewModel: ImportViewModel,
+    onExercisePicked: (Exercise) -> Unit,
+    onCreateCustom: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val results by viewModel.searchResults.collectAsState()
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        TextField(
+            value = query,
+            onValueChange = {
+                query = it
+                viewModel.onSearchQueryChanged(it)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            placeholder = { Text(LocaleStrings.searchHint, fontSize = 14.sp, color = MediumGray) },
+            leadingIcon = { Icon(Icons.Filled.Search, null, tint = MediumGray) },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = {
+                        query = ""
+                        viewModel.onSearchQueryChanged("")
+                    }) {
+                        Icon(Icons.Filled.DeleteOutline, LocaleStrings.clear, tint = MediumGray, modifier = Modifier.size(18.dp))
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = LightGray,
+                unfocusedContainerColor = LightGray,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            ),
+        )
+        if (query.isNotBlank() && results.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(LocaleStrings.noResults, fontSize = 13.sp, color = MediumGray)
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(onClick = onCreateCustom) {
+                    Text(
+                        LocaleStrings.importCreateCustomWith.replace("{0}", query.trim()),
+                        color = AccentOrange,
+                    )
+                }
+            }
+        }
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            items(results, key = { it.id }) { exercise ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onExercisePicked(exercise) }
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ExerciseGifImage(
+                        exercise = exercise,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        exercise.displayName,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = DarkBg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        if (exercise.isCustom) LocaleStrings.customBadge
+                        else ExerciseListViewModel.bodyPartLabel(exercise.bodyPart),
+                        fontSize = 11.sp,
+                        color = if (exercise.isCustom) AccentOrange else MediumGray,
+                    )
+                }
             }
         }
     }
@@ -750,7 +975,7 @@ private fun StepperButton(
             label,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = if (enabled) AccentBlue else MediumGray.copy(alpha = 0.5f),
+            color = if (enabled) AccentOrange else MediumGray.copy(alpha = 0.5f),
         )
     }
 }

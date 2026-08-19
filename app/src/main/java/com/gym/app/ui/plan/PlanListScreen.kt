@@ -12,26 +12,30 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,16 +47,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gym.app.data.entity.WorkoutPlan
+import com.gym.app.data.planshare.PlanShareCodec
 import com.gym.app.ui.components.LocaleStrings
+import com.gym.app.ui.components.WeightModeBadge
 import com.gym.app.ui.components.pressEffect
 
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
@@ -67,16 +74,22 @@ fun PlanListScreen(
     onImportImage: () -> Unit,
     onPlanClick: (Long) -> Unit,
     onPlanView: (Long) -> Unit,
+    onPlanImported: (Long) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val importState by viewModel.importState.collectAsState()
+    val clipboard = LocalClipboardManager.current
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(LocaleStrings.myPlan, color = WhiteColor, fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = { /* more */ }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = WhiteColor)
+                    IconButton(onClick = {
+                        val text = clipboard.getText()?.text ?: ""
+                        viewModel.openImportDialog(if (text.startsWith(PlanShareCodec.PREFIX)) text else "")
+                    }) {
+                        Icon(Icons.Filled.ContentPaste, contentDescription = LocaleStrings.importPlan, tint = WhiteColor)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -131,12 +144,111 @@ fun PlanListScreen(
                 AddPlanCard(onClick = onCreatePlan)
             }
 
-            // 从图片导入训练记录
-            item {
-                ImportImageCard(onClick = onImportImage)
+            // 从图片导入训练记录（设置开关可关闭）
+            if (uiState.showImageImport) {
+                item {
+                    ImportImageCard(onClick = onImportImage)
+                }
             }
         }
     }
+
+    if (importState.showDialog) {
+        ImportPlanDialog(
+            state = importState,
+            onTextChanged = viewModel::onImportTextChanged,
+            onParse = viewModel::parseImportText,
+            onConfirm = { viewModel.confirmImport(onPlanImported) },
+            onBackToInput = viewModel::backToImportInput,
+            onDismiss = viewModel::closeImportDialog,
+        )
+    }
+}
+
+/** 导入分享串对话框：输入 → 解析预览 → 确认导入。 */
+@Composable
+private fun ImportPlanDialog(
+    state: ImportUiState,
+    onTextChanged: (String) -> Unit,
+    onParse: () -> Unit,
+    onConfirm: () -> Unit,
+    onBackToInput: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val preview = state.preview
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                if (preview == null) LocaleStrings.importPlan else LocaleStrings.importPreviewTitle,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            if (preview == null) {
+                Column {
+                    OutlinedTextField(
+                        value = state.raw,
+                        onValueChange = onTextChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(LocaleStrings.importPlanHint, fontSize = 13.sp) },
+                        minLines = 3,
+                        shape = RoundedCornerShape(10.dp),
+                    )
+                    if (state.error != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(state.error.orEmpty(), fontSize = 13.sp, color = Color(0xFFE53935))
+                    }
+                }
+            } else {
+                Column {
+                    Text(preview.planName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DarkBg)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
+                        itemsIndexed(preview.items) { index, item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "${index + 1}. ${item.name}  ${item.sets}×${item.reps}",
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (item.weightMode != 0) {
+                                    WeightModeBadge(item.weightMode)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                if (item.willCreateCustom) {
+                                    Text(LocaleStrings.willCreateCustom, fontSize = 11.sp, color = OrangeColor)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (preview == null) {
+                TextButton(onClick = onParse, enabled = state.raw.isNotBlank() && !state.isWorking) {
+                    Text(LocaleStrings.parseImport, fontWeight = FontWeight.Bold, color = AccentOrange)
+                }
+            } else {
+                TextButton(onClick = onConfirm, enabled = !state.isWorking) {
+                    Text(LocaleStrings.importConfirm, fontWeight = FontWeight.Bold, color = AccentOrange)
+                }
+            }
+        },
+        dismissButton = {
+            if (preview == null) {
+                TextButton(onClick = onDismiss) { Text(LocaleStrings.cancel) }
+            } else {
+                TextButton(onClick = onBackToInput) { Text(LocaleStrings.back) }
+            }
+        },
+    )
 }
 
 @Composable
@@ -163,13 +275,13 @@ private fun PlanCard(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(AccentBlue.copy(alpha = 0.1f)),
+                    .background(AccentOrange.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Filled.FitnessCenter,
                     contentDescription = null,
-                    tint = AccentBlue,
+                    tint = AccentOrange,
                     modifier = Modifier.size(22.dp),
                 )
             }
@@ -202,7 +314,7 @@ private fun PlanCard(
 
             // View 按钮
             TextButton(onClick = onView) {
-                Text(LocaleStrings.viewPlan, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AccentBlue)
+                Text(LocaleStrings.viewPlan, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AccentOrange)
             }
         }
     }
@@ -228,13 +340,13 @@ private fun AddPlanCard(onClick: () -> Unit) {
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(AccentBlue.copy(alpha = 0.1f)),
+                    .background(AccentOrange.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     Icons.Filled.Add,
                     contentDescription = null,
-                    tint = AccentBlue,
+                    tint = AccentOrange,
                     modifier = Modifier.size(22.dp),
                 )
             }
@@ -245,7 +357,7 @@ private fun AddPlanCard(onClick: () -> Unit) {
                 "Add new plan",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
-                color = AccentBlue,
+                color = AccentOrange,
             )
         }
     }

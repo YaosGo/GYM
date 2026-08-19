@@ -37,8 +37,8 @@ import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
 
-private val DarkBg = Color(0xFF1A1A2E)
-private val AccentBlue = Color(0xFF2196F3)
+private val DarkBg = Color(0xFF3E2E23)
+private val AccentOrange = Color(0xFFF2994A)
 private val AccentGreen = Color(0xFF4CAF50)
 private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
@@ -204,8 +204,8 @@ private fun CalendarDay(
                 .clip(CircleShape)
                 .background(
                     when {
-                        isSelected -> AccentBlue
-                        isToday -> AccentBlue.copy(alpha = 0.15f)
+                        isSelected -> AccentOrange
+                        isToday -> AccentOrange.copy(alpha = 0.15f)
                         else -> Color.Transparent
                     }
                 ),
@@ -217,7 +217,7 @@ private fun CalendarDay(
                 fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                 color = when {
                     isSelected -> WhiteColor
-                    isToday -> AccentBlue
+                    isToday -> AccentOrange
                     else -> DarkBg
                 },
             )
