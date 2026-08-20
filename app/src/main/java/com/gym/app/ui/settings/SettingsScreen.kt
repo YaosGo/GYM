@@ -63,7 +63,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -77,6 +76,7 @@ import com.gym.app.data.repository.WorkoutRepository
 import com.gym.app.ui.components.AnimationConfig
 import com.gym.app.ui.components.FrostedBottomSheet
 import com.gym.app.ui.components.LocaleStrings
+import com.gym.app.ui.components.smoothLinePath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -522,24 +522,21 @@ private fun WeightHistoryChart(points: List<WeightPoint>) {
         drawContext.canvas.save()
         drawContext.canvas.clipRect(0f, 0f, clipX, size.height)
 
-        val areaPath = Path().apply {
-            moveTo(padL, padT + ch)
-            values.forEachIndexed { i, v ->
-                val x = padL + (i.toFloat() / (values.size - 1).coerceAtLeast(1)) * cw
-                lineTo(x, padT + (1f - (v - minV) / range) * ch)
-            }
-            lineTo(padL + cw, padT + ch); close()
+        val pts = values.mapIndexed { i, v ->
+            Offset(
+                padL + (i.toFloat() / (values.size - 1).coerceAtLeast(1)) * cw,
+                padT + (1f - (v - minV) / range) * ch,
+            )
+        }
+        val areaPath = smoothLinePath(pts).apply {
+            lineTo(padL + cw, padT + ch)
+            lineTo(padL, padT + ch)
+            close()
         }
         drawPath(areaPath, lineColor.copy(alpha = 0.08f))
 
         if (values.size >= 2) {
-            val lp = Path().apply {
-                values.forEachIndexed { i, v ->
-                    val x = padL + (i.toFloat() / (values.size - 1)) * cw
-                    if (i == 0) moveTo(x, padT + (1f - (v - minV) / range) * ch)
-                    else lineTo(x, padT + (1f - (v - minV) / range) * ch)
-                }
-            }
+            val lp = smoothLinePath(pts)
             drawPath(lp, lineColor, style = Stroke(3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
 

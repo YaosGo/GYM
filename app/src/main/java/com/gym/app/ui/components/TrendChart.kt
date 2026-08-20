@@ -230,12 +230,13 @@ private fun MultiLineChart(
 
         fun drawLineV(values: List<Float>, color: Color) {
             if (values.size < 2) return
-            val path = Path()
-            values.forEachIndexed { i, v ->
-                val x = padL + (i.toFloat() / (values.size - 1)) * cw
-                val y = padT + (1f - (v - minV) / range) * ch
-                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            val pts = values.mapIndexed { i, v ->
+                Offset(
+                    padL + (i.toFloat() / (values.size - 1)) * cw,
+                    padT + (1f - (v - minV) / range) * ch,
+                )
             }
+            val path = smoothLinePath(pts)
             drawPath(path, color, style = Stroke(4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round))
             values.forEachIndexed { i, v ->
                 val x = padL + (i.toFloat() / (values.size - 1)) * cw
@@ -419,25 +420,22 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlanLine(
     drawContext.canvas.save()
     drawContext.canvas.clipRect(0f, 0f, clipX, size.height)
     // area fill
-        val areaPath = Path().apply {
-            moveTo(padL, padT + ch)
-            values.forEachIndexed { i, v ->
-                val x = padL + (i.toFloat() / (values.size - 1).coerceAtLeast(1)) * cw
-                lineTo(x, padT + (1f - (v - minV) / range) * ch)
-            }
-            lineTo(padL + cw, padT + ch); close()
+        val pts = values.mapIndexed { i, v ->
+            Offset(
+                padL + (i.toFloat() / (values.size - 1).coerceAtLeast(1)) * cw,
+                padT + (1f - (v - minV) / range) * ch,
+            )
+        }
+        val areaPath = smoothLinePath(pts).apply {
+            lineTo(padL + cw, padT + ch)
+            lineTo(padL, padT + ch)
+            close()
         }
         drawPath(areaPath, lineColor.copy(alpha = 0.08f))
 
         // line
         if (values.size >= 2) {
-            val lp = Path().apply {
-                values.forEachIndexed { i, v ->
-                    val x = padL + (i.toFloat() / (values.size - 1)) * cw
-                    if (i == 0) moveTo(x, padT + (1f - (v - minV) / range) * ch)
-                    else lineTo(x, padT + (1f - (v - minV) / range) * ch)
-                }
-            }
+            val lp = smoothLinePath(pts)
             drawPath(lp, lineColor, style = Stroke(3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
 
