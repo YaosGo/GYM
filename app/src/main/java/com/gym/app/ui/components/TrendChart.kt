@@ -511,5 +511,5 @@ private fun DataChip(label: String, value: String, color: Color) {
 
 private fun formatVolume(v: Float): String {
     val d = v.toDouble()
-    return if (d < 1000) d.toInt().toString() else "${"%.1f".format(d / 1000)}k"
+    return if (d == d.toInt().toDouble()) d.toInt().toString() else "%.1f".format(d)
 }

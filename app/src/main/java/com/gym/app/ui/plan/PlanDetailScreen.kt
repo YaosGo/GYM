@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -42,6 +43,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -70,6 +72,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -92,6 +95,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import android.content.Intent
 import java.text.SimpleDateFormat
@@ -365,7 +369,8 @@ fun PlanDetailScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                itemsIndexed(uiState.exercises, key = { _, item -> item.planExercise.id }) { index, item ->
+                // key 必须唯一：新添加未保存的动作 id 都是 0，需拼接 exerciseId 区分
+                itemsIndexed(uiState.exercises, key = { _, item -> "${item.planExercise.id}_${item.planExercise.exerciseId}" }) { index, item ->
                     ExerciseItemCard(
                         number = index + 1,
                         item = item,
@@ -374,6 +379,7 @@ fun PlanDetailScreen(
                         onRemove = { viewModel.removeExercise(index) },
                         onSetsChanged = { viewModel.updateSets(index, it) },
                         onRepsChanged = { viewModel.updateReps(index, it) },
+                        onWeightChanged = { viewModel.updateWeight(index, it) },
                         onWeightModeChanged = { mode -> viewModel.updateWeightMode(index, mode) },
                         onMoveUp = {
                             if (index > 0) viewModel.moveItem(index, index - 1)
@@ -515,6 +521,9 @@ fun PlanDetailScreen(
 // 动作卡片：查看模式只读，编辑模式可交互
 // ═══════════════════════════════════════════════════════════════
 
+/** 编辑弹窗的目标字段 */
+private enum class PlanEditField { Sets, Reps, Weight }
+
 @Composable
 private fun ExerciseItemCard(
     number: Int,
@@ -524,11 +533,15 @@ private fun ExerciseItemCard(
     onRemove: () -> Unit,
     onSetsChanged: (Int) -> Unit,
     onRepsChanged: (Int) -> Unit,
+    onWeightChanged: (Float) -> Unit = {},
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onExerciseClick: (Exercise) -> Unit = {},
     onWeightModeChanged: (Int) -> Unit = {},
 ) {
+    // 点击数字弹窗编辑（替代 +/− 步进器）
+    var editField by remember { mutableStateOf<PlanEditField?>(null) }
+    var editText by remember { mutableStateOf("") }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -586,12 +599,37 @@ private fun ExerciseItemCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isEditing) {
-                        Stepper(value = item.planExercise.targetSets, onChanged = onSetsChanged, label = "组")
+                        EditableNumber(
+                            text = "${item.planExercise.targetSets} 组",
+                            onClick = {
+                                editField = PlanEditField.Sets
+                                editText = "${item.planExercise.targetSets}"
+                            },
+                        )
                         Text(" × ", fontSize = 13.sp, color = MediumGray)
-                        Stepper(value = item.planExercise.targetReps, onChanged = onRepsChanged, label = "次")
+                        EditableNumber(
+                            text = "${item.planExercise.targetReps} 次",
+                            onClick = {
+                                editField = PlanEditField.Reps
+                                editText = "${item.planExercise.targetReps}"
+                            },
+                        )
+                        Text(" × ", fontSize = 13.sp, color = MediumGray)
+                        EditableNumber(
+                            text = if (item.planExercise.targetWeight > 0f)
+                                "${formatWeightKg(item.planExercise.targetWeight)} kg"
+                            else "— kg",
+                            onClick = {
+                                editField = PlanEditField.Weight
+                                editText = if (item.planExercise.targetWeight > 0f)
+                                    formatWeightKg(item.planExercise.targetWeight) else ""
+                            },
+                        )
                     } else {
                         Text(
-                            "${item.planExercise.targetSets} 组 × ${item.planExercise.targetReps} 次",
+                            "${item.planExercise.targetSets} 组 × ${item.planExercise.targetReps} 次" +
+                                if (item.planExercise.targetWeight > 0f)
+                                    " × ${formatWeightKg(item.planExercise.targetWeight)}kg" else "",
                             fontSize = 13.sp,
                             color = MediumGray,
                         )
@@ -631,33 +669,89 @@ private fun ExerciseItemCard(
             }
         }
     }
+
+    // 组数/次数/目标重量编辑弹窗
+    if (editField != null) {
+        AlertDialog(
+            onDismissRequest = { editField = null },
+            title = {
+                Text(
+                    when (editField) {
+                        PlanEditField.Sets -> "目标组数"
+                        PlanEditField.Reps -> "目标次数"
+                        PlanEditField.Weight -> "目标重量"
+                        null -> ""
+                    },
+                    fontWeight = FontWeight.Bold,
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        when (editField) {
+                            PlanEditField.Sets, PlanEditField.Reps -> "范围 1–99"
+                            PlanEditField.Weight -> "单位 kg，0 表示不设定"
+                            null -> ""
+                        },
+                        fontSize = 12.sp,
+                        color = MediumGray,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editText,
+                        onValueChange = { input ->
+                            editText = if (editField == PlanEditField.Weight) input.filter { it.isDigit() || it == '.' }
+                            else input.filter { it.isDigit() }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = if (editField == PlanEditField.Weight) KeyboardType.Decimal else KeyboardType.Number,
+                        ),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    when (editField) {
+                        PlanEditField.Sets -> editText.toIntOrNull()?.let { if (it in 1..99) onSetsChanged(it) }
+                        PlanEditField.Reps -> editText.toIntOrNull()?.let { if (it in 1..99) onRepsChanged(it) }
+                        PlanEditField.Weight -> editText.toFloatOrNull()?.let { if (it in 0f..500f) onWeightChanged(it) }
+                        null -> {}
+                    }
+                    editField = null
+                }) {
+                    Text("确定", color = AccentOrange, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editField = null }) {
+                    Text("取消", color = MediumGray)
+                }
+            },
+        )
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 步进器（组数/次数 ±）
+// 可点击数字（点击弹窗输入）
 // ═══════════════════════════════════════════════════════════════
 
 @Composable
-private fun Stepper(value: Int, onChanged: (Int) -> Unit, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "−",
-            modifier = Modifier.clickable { if (value > 1) onChanged(value - 1) }.padding(horizontal = 5.dp),
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            color = if (value > 1) AccentOrange else MediumGray.copy(alpha = 0.3f),
-        )
-        Text("$value", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = DarkBg)
-        Text(
-            "+",
-            modifier = Modifier.clickable { if (value < 99) onChanged(value + 1) }.padding(horizontal = 5.dp),
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            color = if (value < 99) AccentOrange else MediumGray.copy(alpha = 0.3f),
-        )
-        Text(" $label", fontSize = 12.sp, color = MediumGray)
-    }
+private fun EditableNumber(text: String, onClick: () -> Unit) {
+    Text(
+        text = text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        color = AccentOrange,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+    )
 }
+
+private fun formatWeightKg(w: Float): String =
+    if (w == w.toInt().toFloat()) w.toInt().toString()
+    else java.text.DecimalFormat("#.#").format(w.toDouble())
 
 // ═══════════════════════════════════════════════════════════════
 // 搜索结果条目

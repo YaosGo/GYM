@@ -213,6 +213,16 @@ class PlanDetailViewModel(
         }
     }
 
+    fun updateWeight(index: Int, weight: Float) {
+        val current = _exercises.value.toMutableList()
+        if (index in current.indices) {
+            current[index] = current[index].copy(
+                planExercise = current[index].planExercise.copy(targetWeight = weight)
+            )
+            _exercises.value = current
+        }
+    }
+
     /** 更新动作的重量记录方式（普通/助力/负重），乐观更新界面 + 异步写库。 */
     fun updateWeightMode(index: Int, mode: Int) {
         val current = _exercises.value.toMutableList()

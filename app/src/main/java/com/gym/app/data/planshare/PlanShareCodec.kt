@@ -68,20 +68,39 @@ object PlanShareCodec {
         return PREFIX + b64
     }
 
+    /** 最小有效载荷长度：最短的合法分享串 JSON 编码后远长于此，用于过滤随机文本。 */
+    private const val MIN_PAYLOAD_LENGTH = 50
+
+    /** 常见的不可见字符与窄空格：isWhitespace() 不覆盖 NBSP 等，需要显式过滤。 */
+    private const val INVISIBLE_CHARS = "​‌‍﻿ "
+
+    /**
+     * 从任意粘贴文本中提取完整分享串（`GYM1:` 前缀 + Base64URL 主体）。
+     * 容忍前后有多余文字（聊天软件复制时常带标签或换行）；找不到返回 null。
+     */
+    fun extractShareString(text: String): String? {
+        val cleaned = text.filterNot { it.isWhitespace() || it in INVISIBLE_CHARS }
+        val prefixIndex = cleaned.lastIndexOf(PREFIX)
+        if (prefixIndex >= 0) {
+            val payload = base64RunFrom(cleaned, prefixIndex + PREFIX.length)
+            return if (payload.length >= MIN_PAYLOAD_LENGTH) PREFIX + payload else null
+        }
+        // 无前缀：找全文中最长的 Base64URL 连续段
+        val best = longestBase64Run(cleaned)
+        return if (best != null) PREFIX + best else null
+    }
+
     /**
      * 解码分享串；无效返回 null。
      * 宽容处理：无前缀的原始 Base64 也可解析（方便用户粘贴时被截断前缀）；
-     * 聊天软件复制长文本可能折行或插入不可见字符，解码前统一清除；
+     * 聊天软件复制长文本可能折行、插入不可见字符或带前后文字，解码前统一清除；
      * 兼容旧版紧凑键名（a/b/c/d/e/f）分享串。
      */
     fun decode(raw: String): SharedPlan? {
-        val trimmed = raw.trim()
-        val payload = if (trimmed.startsWith(PREFIX)) trimmed.removePrefix(PREFIX) else trimmed
-        // 清除所有空白（换行/空格）与常见不可见字符（零宽空格等）
-        val cleaned = payload.filterNot { it.isWhitespace() || it in "​‌‍﻿" }
-        if (cleaned.isBlank()) return null
+        val cleaned = raw.filterNot { it.isWhitespace() || it in INVISIBLE_CHARS }
+        val payload = extractPayload(cleaned) ?: return null
         return try {
-            val json = String(Base64.getUrlDecoder().decode(cleaned), Charsets.UTF_8)
+            val json = String(Base64.getUrlDecoder().decode(payload), Charsets.UTF_8)
             val plan = try {
                 adapter.fromJson(json)
             } catch (_: Exception) {
@@ -92,6 +111,43 @@ object PlanShareCodec {
             null
         }
     }
+
+    /** 从已清理文本中提取 Base64URL 主体：优先取 GYM1: 前缀之后的连续段。 */
+    private fun extractPayload(cleaned: String): String? {
+        val prefixIndex = cleaned.lastIndexOf(PREFIX)
+        val payload = if (prefixIndex >= 0) {
+            base64RunFrom(cleaned, prefixIndex + PREFIX.length)
+        } else {
+            longestBase64Run(cleaned) ?: ""
+        }
+        return if (payload.length >= MIN_PAYLOAD_LENGTH) payload else null
+    }
+
+    /** 从 [start] 起截取连续 Base64URL 字符段。 */
+    private fun base64RunFrom(text: String, start: Int): String {
+        var end = start
+        while (end < text.length && isBase64UrlChar(text[end])) end++
+        return text.substring(start, end)
+    }
+
+    /** 全文中最长的 Base64URL 连续段（无前缀时兜底）；无有效段返回 null。 */
+    private fun longestBase64Run(text: String): String? {
+        var best: String? = null
+        var i = 0
+        while (i < text.length) {
+            if (isBase64UrlChar(text[i])) {
+                val run = base64RunFrom(text, i)
+                if (best == null || run.length > best.length) best = run
+                i += run.length
+            } else {
+                i++
+            }
+        }
+        return best
+    }
+
+    private fun isBase64UrlChar(c: Char): Boolean =
+        c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9' || c == '-' || c == '_' || c == '='
 
     private fun isValid(plan: SharedPlan): Boolean =
         plan.v == CURRENT_VERSION &&

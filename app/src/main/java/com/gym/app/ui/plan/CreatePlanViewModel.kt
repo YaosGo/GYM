@@ -25,6 +25,7 @@ data class SelectedExercise(
     val exercise: Exercise,
     val targetSets: Int = 3,
     val targetReps: Int = 10,
+    val targetWeight: Float = 0f,
 )
 
 data class CreatePlanUiState(
@@ -62,7 +63,7 @@ class CreatePlanViewModel(
                 val selected = planExercises.map { pe ->
                     val exercise = exerciseRepository.getExerciseById(pe.exerciseId)
                     if (exercise != null) {
-                        SelectedExercise(exercise, pe.targetSets, pe.targetReps)
+                        SelectedExercise(exercise, pe.targetSets, pe.targetReps, pe.targetWeight)
                     } else null
                 }.filterNotNull()
                 _selectedExercises.value = selected
@@ -115,6 +116,12 @@ class CreatePlanViewModel(
         }
     }
 
+    fun updateExerciseWeight(exerciseId: String, weight: Float) {
+        _selectedExercises.value = _selectedExercises.value.map {
+            if (it.exercise.id == exerciseId) it.copy(targetWeight = weight) else it
+        }
+    }
+
     /** 更新动作的重量记录方式（普通/助力/负重），乐观更新界面 + 异步写库。 */
     fun updateExerciseWeightMode(exerciseId: String, mode: Int) {
         _selectedExercises.value = _selectedExercises.value.map {
@@ -151,6 +158,7 @@ class CreatePlanViewModel(
                         exerciseId = se.exercise.id,
                         targetSets = se.targetSets,
                         targetReps = se.targetReps,
+                        targetWeight = se.targetWeight,
                         sortOrder = index,
                     )
                 }

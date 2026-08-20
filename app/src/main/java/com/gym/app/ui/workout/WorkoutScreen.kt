@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -78,6 +79,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -100,7 +102,7 @@ private val LightGray = Color(0xFFF5F5F5)
 private val MediumGray = Color(0xFF9E9E9E)
 private val WhiteColor = Color.White
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WorkoutScreen(
     viewModel: WorkoutViewModel,
@@ -214,9 +216,14 @@ fun WorkoutScreen(
         )
     }
 
-    // 系统返回键拦截：面板显示时关闭面板并返回"我的计划"
-    BackHandler(enabled = sheetContentVisible) {
-        exitWorkout()
+    // 系统返回键拦截：训练进行中（非通过"完成训练"按钮）→ 弹退出确认；
+    // 完成面板显示时 → 关闭面板并返回"我的计划"（训练已保存，无需确认）
+    BackHandler(enabled = uiState.isRunning || uiState.isPaused || sheetContentVisible) {
+        if (sheetContentVisible) {
+            exitWorkout()
+        } else {
+            showExitDialog = true
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -255,12 +262,12 @@ fun WorkoutScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // 统计栏
-            item {
+            // 统计栏（吸顶：下滑时完成重量+训练时间保持可见）
+            stickyHeader {
                 StatsHeader(
                     completedTons = uiState.completedTons,
-                    targetTons = uiState.targetTons,
-                    elapsedSeconds = uiState.elapsedSeconds,
+                    // 训练未开始时显示占位符，不显示 00:00（看起来像时间戳）
+                    elapsedSeconds = if (uiState.isRunning || uiState.isPaused) uiState.elapsedSeconds else null,
                     weightUnit = weightUnit,
                 )
             }
@@ -280,6 +287,8 @@ fun WorkoutScreen(
                     state = state,
                     weightUnit = weightUnit,
                     bodyWeightKg = uiState.bodyWeightKg,
+                    // 训练未开始时不允许勾选完成（可提前编辑次数/重量，但不算完成）
+                    setsEnabled = uiState.isRunning || uiState.isPaused,
                     onToggleExpanded = { viewModel.toggleExpanded(index) },
                     onToggleSetCompleted = { setIndex -> viewModel.toggleSetCompleted(index, setIndex) },
                     onAddSet = { viewModel.addSet(index) },
@@ -478,14 +487,13 @@ private fun WorkoutBottomBar(
 // === 复用组件 ===
 
 @Composable
-private fun StatsHeader(completedTons: Float, targetTons: Float, elapsedSeconds: Int, weightUnit: String) {
+private fun StatsHeader(completedTons: Float, elapsedSeconds: Int?, weightUnit: String) {
     Row(
         modifier = Modifier.fillMaxWidth().background(DarkBg).padding(horizontal = 16.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         StatItem(LocaleStrings.completedWeight, formatTons(completedTons), weightUnit)
-        StatItem(LocaleStrings.targetWeight, formatTons(targetTons), weightUnit)
-        StatItem(LocaleStrings.totalWorkout, formatTimer(elapsedSeconds), "")
+        StatItem(LocaleStrings.totalWorkout, elapsedSeconds?.let { formatTimer(it) } ?: "--:--", "")
     }
 }
 
@@ -509,6 +517,8 @@ private fun ExerciseWorkoutCard(
     state: ExerciseWorkoutState,
     weightUnit: String,
     bodyWeightKg: Float,
+    /** 训练是否已开始（未开始时禁用勾选完成） */
+    setsEnabled: Boolean,
     onToggleExpanded: () -> Unit,
     onToggleSetCompleted: (Int) -> Unit,
     onAddSet: () -> Unit,
@@ -547,11 +557,24 @@ private fun ExerciseWorkoutCard(
                         Text(LocaleStrings.weightModeWeightedDesc, fontSize = 11.sp, color = Color(0xFFFF7043))
                     }
                 }
+                Spacer(modifier = Modifier.width(6.dp))
+                // 展开/折叠按钮（右上角圆形）
+                IconButton(
+                    onClick = onToggleExpanded,
+                    modifier = Modifier.size(30.dp).background(LightGray, CircleShape),
+                ) {
+                    Icon(
+                        if (state.isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (state.isExpanded) "折叠" else "展开",
+                        tint = DarkBg,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 PrevBest("上次", state.previous?.weight, state.previous?.reps, state.previous != null, weightUnit)
-                PrevBest("最佳", state.bestSet?.weight, state.bestSet?.reps, state.bestSet != null, weightUnit)
+                PrevBest("最佳", state.bestSet?.weight, state.bestSet?.reps, state.bestSet != null, weightUnit, star = state.isNewRecord)
             }
             if (state.musclesWorked.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
@@ -579,7 +602,7 @@ private fun ExerciseWorkoutCard(
                         val effective = if (bodyWeightKg > 0f && (state.exercise.isAssisted || state.exercise.isWeighted)) {
                             state.exercise.effectiveWeight(bodyWeightKg, s.weight)
                         } else null
-                        SetRow(i + 1, s, state.actualSets.size > 1, weightUnit, effective, { onToggleSetCompleted(i) }, { onRepsChanged(i, it) }, { onWeightChanged(i, it) }, { onRemoveSet(i) })
+                        SetRow(i + 1, s, state.actualSets.size > 1, weightUnit, effective, setsEnabled, { onToggleSetCompleted(i) }, { onRepsChanged(i, it) }, { onWeightChanged(i, it) }, { onRemoveSet(i) })
                     }
                     Row(Modifier.fillMaxWidth().clickable(onClick = onAddSet).padding(vertical = 6.dp), horizontalArrangement = Arrangement.Center) {
                         Icon(Icons.Filled.Add, null, Modifier.size(16.dp), tint = MediumGray)
@@ -592,19 +615,27 @@ private fun ExerciseWorkoutCard(
 }
 
 @Composable
-private fun PrevBest(label: String, weight: Float?, reps: Int?, hasData: Boolean, unit: String) {
+private fun PrevBest(label: String, weight: Float?, reps: Int?, hasData: Boolean, unit: String, star: Boolean = false) {
     Column {
         Text(label, fontSize = 11.sp, color = MediumGray)
         if (hasData && weight != null && reps != null) {
-            Text("${formatWeight(weight)} $unit × $reps", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = DarkBg)
+            Text(
+                "${if (star) "★ " else ""}${formatWeight(weight)} $unit × $reps",
+                fontSize = 13.sp,
+                fontWeight = if (star) FontWeight.Bold else FontWeight.Medium,
+                color = if (star) Color(0xFFFFA000) else DarkBg,
+            )
         } else {
             Text("— $unit × —", fontSize = 13.sp, color = MediumGray)
         }
     }
 }
 
+/** 弹窗编辑的目标字段 */
+private enum class EditTarget { Reps, Weight }
+
 @Composable
-private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, unit: String, effectiveWeight: Float?, onToggle: () -> Unit, onReps: (Int) -> Unit, onWeight: (Float) -> Unit, onRemove: () -> Unit) {
+private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, unit: String, effectiveWeight: Float?, toggleEnabled: Boolean, onToggle: () -> Unit, onReps: (Int) -> Unit, onWeight: (Float) -> Unit, onRemove: () -> Unit) {
     val checkScale by animateFloatAsState(
         targetValue = if (s.completed) 1f else 0.3f,
         animationSpec = spring(dampingRatio = AnimationConfig.CheckMark.scaleDamping, stiffness = AnimationConfig.CheckMark.scaleStiffness),
@@ -615,30 +646,58 @@ private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, unit: String, effec
         animationSpec = tween(AnimationConfig.CheckMark.bgColorMs),
         label = "checkBg",
     )
+    // 未开始训练时禁用勾选：置灰且不可点击
+    val checkAlpha = if (toggleEnabled) 1f else 0.35f
+    // 点击数字弹窗编辑（替代 +/− 步进器）
+    var editTarget by remember { mutableStateOf<EditTarget?>(null) }
+    var editText by remember { mutableStateOf("") }
+
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(24.dp).clip(CircleShape).background(checkBgColor).clickable(onClick = onToggle),
+            Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(checkBgColor.copy(alpha = checkBgColor.alpha * checkAlpha))
+                .clickable(enabled = toggleEnabled, onClick = onToggle),
             contentAlignment = Alignment.Center,
         ) {
             if (s.completed) {
                 Icon(
-                    Icons.Filled.Check, null, tint = WhiteColor,
+                    Icons.Filled.Check, null, tint = WhiteColor.copy(alpha = checkAlpha),
                     modifier = Modifier.size(16.dp).scale(checkScale),
                 )
             }
         }
         Spacer(Modifier.width(8.dp))
-        Text("−", Modifier.clickable { if (s.reps > 0) onReps(s.reps - 1) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = if (s.reps > 0) DarkBg else MediumGray.copy(alpha = 0.3f))
-        Text("${s.reps} 次", fontWeight = FontWeight.Bold, color = DarkBg, modifier = Modifier.width(50.dp))
-        Text("+", Modifier.clickable { if (s.reps < 99) onReps(s.reps + 1) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = DarkBg)
+        // 次数：点击弹窗输入
+        Text(
+            "${s.reps} 次",
+            fontWeight = FontWeight.Bold,
+            color = DarkBg,
+            modifier = Modifier
+                .width(56.dp)
+                .clickable {
+                    editTarget = EditTarget.Reps
+                    editText = if (s.reps > 0) "${s.reps}" else ""
+                }
+                .padding(vertical = 6.dp),
+        )
         Spacer(Modifier.width(8.dp))
-        // 重量输入列：助力/负重动作下方实时显示换算后的实际对抗重量
+        // 重量输入列：点击弹窗输入；助力/负重动作下方实时显示换算后的实际对抗重量
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("−", Modifier.clickable { if (s.weight > 0f) onWeight((s.weight - 2.5f).coerceAtLeast(0f)) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = if (s.weight > 0f) DarkBg else MediumGray.copy(alpha = 0.3f))
-                Text(if (s.weight > 0f) "${formatWeight(s.weight)} $unit" else "— $unit", fontWeight = FontWeight.Bold, color = if (s.weight > 0f) AccentGreen else MediumGray, modifier = Modifier.width(48.dp))
-                Text("+", Modifier.clickable { if (s.weight < 500f) onWeight((s.weight + 2.5f).coerceAtMost(500f)) }.padding(horizontal = 4.dp), fontWeight = FontWeight.Bold, color = DarkBg)
-            }
+            Text(
+                if (s.weight > 0f) "${formatWeight(s.weight)} $unit" else "— $unit",
+                fontWeight = FontWeight.Bold,
+                color = if (s.weight > 0f) AccentGreen else MediumGray,
+                modifier = Modifier
+                    .width(64.dp)
+                    .clickable {
+                        editTarget = EditTarget.Weight
+                        editText = if (s.weight > 0f) formatWeight(s.weight) else ""
+                    }
+                    .padding(vertical = 6.dp),
+                textAlign = TextAlign.Center,
+            )
             if (effectiveWeight != null && s.weight > 0f) {
                 Text(
                     "${LocaleStrings.effectiveWeightShort} ${formatWeight(effectiveWeight)} $unit",
@@ -650,12 +709,59 @@ private fun SetRow(n: Int, s: ActualSet, canRemove: Boolean, unit: String, effec
         }
         if (canRemove) IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) { Icon(Icons.Filled.Remove, null, Modifier.size(14.dp), tint = MediumGray) }
     }
+
+    // 编辑弹窗
+    if (editTarget != null) {
+        AlertDialog(
+            onDismissRequest = { editTarget = null },
+            title = { Text(if (editTarget == EditTarget.Reps) "编辑次数" else "编辑重量", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "第 $n 组 · 单位：${if (editTarget == EditTarget.Reps) "次" else unit}",
+                        fontSize = 12.sp,
+                        color = MediumGray,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editText,
+                        onValueChange = { input ->
+                            // 只保留 ASCII 数字/小数点：isDigit() 会放过全角数字（１２），
+                            // toIntOrNull/toFloatOrNull 解析不了，导致输入静默丢失
+                            editText = if (editTarget == EditTarget.Reps) input.filter { it in '0'..'9' }
+                            else input.filter { it in '0'..'9' || it == '.' }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = if (editTarget == EditTarget.Reps) KeyboardType.Number else KeyboardType.Decimal,
+                        ),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    when (editTarget) {
+                        EditTarget.Reps -> editText.toIntOrNull()?.let { if (it in 0..999) onReps(it) }
+                        EditTarget.Weight -> editText.toFloatOrNull()?.let { if (it in 0f..500f) onWeight(it) }
+                        null -> {}
+                    }
+                    editTarget = null
+                }) {
+                    Text("确定", color = AccentOrange, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editTarget = null }) {
+                    Text("取消", color = MediumGray)
+                }
+            },
+        )
+    }
 }
 
 private fun formatTons(t: Float): String {
     val v = t.toDouble()
-    return if (v < 1000) (if (v == v.toInt().toDouble()) "${v.toInt()}" else java.text.DecimalFormat("#.#").format(v))
-    else "${java.text.DecimalFormat("#.#").format(v / 1000)}k"
+    return if (v == v.toInt().toDouble()) "${v.toInt()}" else java.text.DecimalFormat("#.#").format(v)
 }
 private fun formatTimer(sec: Int): String = "${(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}"
 private fun formatWeight(w: Float): String {

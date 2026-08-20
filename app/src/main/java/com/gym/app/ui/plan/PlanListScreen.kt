@@ -87,7 +87,8 @@ fun PlanListScreen(
                 actions = {
                     IconButton(onClick = {
                         val text = clipboard.getText()?.text ?: ""
-                        viewModel.openImportDialog(if (text.startsWith(PlanShareCodec.PREFIX)) text else "")
+                        // 剪贴板内容前后可能带多余文字，用提取器拿到干净的分享串再预填
+                        viewModel.openImportDialog(PlanShareCodec.extractShareString(text) ?: "")
                     }) {
                         Icon(Icons.Filled.ContentPaste, contentDescription = LocaleStrings.importPlan, tint = WhiteColor)
                     }

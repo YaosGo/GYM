@@ -50,6 +50,10 @@ data class WorkoutPlanExercise(
     @ColumnInfo(name = "target_reps")
     val targetReps: Int,
 
+    /** 目标每组重量（kg）；0 表示计划未设定，训练时无上次数据则预填此值 */
+    @ColumnInfo(name = "target_weight")
+    val targetWeight: Float = 0f,
+
     /** 动作在计划中的排序 */
     @ColumnInfo(name = "sort_order")
     val sortOrder: Int = 0,

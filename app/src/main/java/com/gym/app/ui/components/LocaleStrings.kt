@@ -75,7 +75,6 @@ object LocaleStrings {
     // 训练
     const val workoutTitle = "训练"
     const val completedWeight = "完成重量"
-    const val targetWeight = "目标重量"
     const val totalWorkout = "训练时长"
     const val trainingPlan = "训练计划"
     const val previous = "上次"

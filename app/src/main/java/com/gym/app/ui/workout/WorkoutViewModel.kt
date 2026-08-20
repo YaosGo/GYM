@@ -1,5 +1,6 @@
 package com.gym.app.ui.workout
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -49,9 +50,17 @@ data class ExerciseWorkoutState(
     val actualSets: List<ActualSet>,
     val sortOrder: Int,
     val previous: PreviousSummary? = null,
+    /** 历史最佳（训练开始前从历史记录算出，本场训练内不变），取消勾选后最佳可还原 */
+    val historyBest: BestSet? = null,
+    /** 展示用最佳 = 历史最佳与本次已完成组的最大值；取消勾选后自动还原 */
     val bestSet: BestSet? = null,
+    /** 本次训练已打破历史最佳（勾选完成后实时对比），「最佳」栏打星 */
+    val isNewRecord: Boolean = false,
     val musclesWorked: List<String> = emptyList(),
-    val isExpanded: Boolean = true,
+    /** 进训练页默认全部折叠，练到哪个展开哪个 */
+    val isExpanded: Boolean = false,
+    /** 计划目标重量（kg），无上次数据时预填每组重量；0 表示计划未设定 */
+    val targetWeight: Float = 0f,
 )
 
 data class WorkoutUiState(
@@ -59,7 +68,6 @@ data class WorkoutUiState(
     val exercises: List<ExerciseWorkoutState> = emptyList(),
     val elapsedSeconds: Int = 0,
     val completedTons: Float = 0f,
-    val targetTons: Float = 0f,
     val isRunning: Boolean = false,
     val isPaused: Boolean = false,
     val longPressProgress: Float = 0f, // 0..1, 长按 3 秒进度
@@ -93,6 +101,8 @@ class WorkoutViewModel(
 
     private var timerJob: Job? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+    private val timer = WorkoutTimer { SystemClock.elapsedRealtime() }
 
     init {
         viewModelScope.launch {
@@ -132,13 +142,18 @@ class WorkoutViewModel(
                     actualSets = List(pe.targetSets) { setIndex ->
                         ActualSet(
                             reps = lastReps.getOrElse(setIndex) { pe.targetReps },
-                            weight = lastWeights.getOrElse(setIndex) { 2.5f },
+                            // 预填重量：上次数据优先，没有则用计划目标重量
+                            weight = lastWeights.getOrElse(setIndex) {
+                                if (pe.targetWeight > 0f) pe.targetWeight else 2.5f
+                            },
                         )
                     },
                     sortOrder = pe.sortOrder,
                     previous = previous,
+                    historyBest = bestSet,
                     bestSet = bestSet,
                     musclesWorked = muscles,
+                    targetWeight = pe.targetWeight,
                 )
             }
 
@@ -155,38 +170,41 @@ class WorkoutViewModel(
             while (true) {
                 delay(1000)
                 val state = _uiState.value
-                if (state.isRunning) {
-                    _uiState.value = state.copy(
-                        elapsedSeconds = state.elapsedSeconds + 1,
-                        completedTons = calculateCompletedTons(state.exercises),
-                        targetTons = calculateTargetTons(state.exercises),
-                    )
-                } else {
-                    _uiState.value = state.copy(
-                        completedTons = calculateCompletedTons(state.exercises),
-                        targetTons = calculateTargetTons(state.exercises),
-                    )
-                }
+                _uiState.value = state.copy(
+                    elapsedSeconds = currentElapsedSeconds(),
+                    completedTons = calculateCompletedTons(state.exercises),
+                )
             }
         }
     }
 
+    /** 当前训练时长（秒）：时间戳差值，后台/熄屏后回前台自动校正；暂停中冻结。 */
+    private fun currentElapsedSeconds(): Int = timer.currentSeconds()
+
     /** 开始训练（状态一→状态二），记录本次训练的体重快照。 */
     fun startWorkout(bodyWeightKg: Float) {
+        timer.start()
         _uiState.value = _uiState.value.copy(
             isRunning = true,
             isPaused = false,
+            elapsedSeconds = 0,
             bodyWeightKg = bodyWeightKg.coerceAtLeast(0f),
         )
     }
 
-    /** 暂停训练（状态二→状态三） */
+    /** 暂停训练（状态二→状态三）：冻结当前时长 */
     fun pauseWorkout() {
-        _uiState.value = _uiState.value.copy(isRunning = false, isPaused = true)
+        timer.pause()
+        _uiState.value = _uiState.value.copy(
+            isRunning = false,
+            isPaused = true,
+            elapsedSeconds = timer.currentSeconds(),
+        )
     }
 
-    /** 暂停后继续（状态三→状态二） */
+    /** 暂停后继续（状态三→状态二）：结算暂停时长，恢复计时 */
     fun resumeWorkout() {
+        timer.resume()
         _uiState.value = _uiState.value.copy(isRunning = true, isPaused = false)
     }
 
@@ -198,6 +216,8 @@ class WorkoutViewModel(
     /** 长按完成触发 */
     fun triggerCompletion() {
         if (_uiState.value.isSaving) return
+        // 结算最终时长并停表（elapsedRealtime 时间戳差值）
+        val finalElapsedSeconds = timer.finalSeconds()
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSaving = true, isRunning = false)
             timerJob?.cancel()
@@ -207,7 +227,7 @@ class WorkoutViewModel(
             val session = WorkoutSession(
                 planId = planId,
                 date = today,
-                durationSeconds = _uiState.value.elapsedSeconds,
+                durationSeconds = finalElapsedSeconds,
                 bodyWeightKg = bodyWeightKg,
             )
 
@@ -264,11 +284,10 @@ class WorkoutViewModel(
         if (setIndex !in state.actualSets.indices) return
         val newSets = state.actualSets.toMutableList()
         newSets[setIndex] = newSets[setIndex].copy(completed = !newSets[setIndex].completed)
-        exercises[exerciseIndex] = state.copy(actualSets = newSets)
+        exercises[exerciseIndex] = withBest(state, newSets)
         _uiState.value = _uiState.value.copy(
             exercises = exercises,
             completedTons = calculateCompletedTons(exercises),
-            targetTons = calculateTargetTons(exercises),
         )
     }
 
@@ -280,13 +299,12 @@ class WorkoutViewModel(
         exercises[exerciseIndex] = state.copy(
             actualSets = state.actualSets + ActualSet(
                 reps = last?.reps ?: state.targetReps,
-                weight = last?.weight ?: 2.5f,
+                weight = last?.weight ?: (if (state.targetWeight > 0f) state.targetWeight else 2.5f),
             )
         )
         _uiState.value = _uiState.value.copy(
             exercises = exercises,
             completedTons = calculateCompletedTons(exercises),
-            targetTons = calculateTargetTons(exercises),
         )
     }
 
@@ -295,13 +313,13 @@ class WorkoutViewModel(
         if (exerciseIndex !in exercises.indices) return
         val state = exercises[exerciseIndex]
         if (state.actualSets.size <= 1) return
-        exercises[exerciseIndex] = state.copy(
-            actualSets = state.actualSets.filterIndexed { i, _ -> i != setIndex }
+        exercises[exerciseIndex] = withBest(
+            state,
+            state.actualSets.filterIndexed { i, _ -> i != setIndex },
         )
         _uiState.value = _uiState.value.copy(
             exercises = exercises,
             completedTons = calculateCompletedTons(exercises),
-            targetTons = calculateTargetTons(exercises),
         )
     }
 
@@ -320,11 +338,10 @@ class WorkoutViewModel(
         if (setIndex !in state.actualSets.indices) return
         val newSets = state.actualSets.toMutableList()
         newSets[setIndex] = transform(newSets[setIndex])
-        exercises[exerciseIndex] = state.copy(actualSets = newSets)
+        exercises[exerciseIndex] = withBest(state, newSets)
         _uiState.value = _uiState.value.copy(
             exercises = exercises,
             completedTons = calculateCompletedTons(exercises),
-            targetTons = calculateTargetTons(exercises),
         )
     }
 
@@ -345,15 +362,8 @@ class WorkoutViewModel(
         }.toFloat()
     }
 
-    /** 目标重量：统计当前全部组（有效重量 × 次数），不含完成标记。 */
-    private fun calculateTargetTons(exercises: List<ExerciseWorkoutState>): Float {
-        val bodyWeightKg = _uiState.value.bodyWeightKg
-        return exercises.sumOf { state ->
-            state.actualSets.sumOf { set ->
-                (effectiveWeight(state.exercise, set.weight, bodyWeightKg).toDouble() * set.reps).toDouble()
-            }
-        }.toFloat()
-    }
+    private fun withBest(state: ExerciseWorkoutState, sets: List<ActualSet>): ExerciseWorkoutState =
+        recomputeBest(state, sets)
 
     /** 有效对抗重量：助力=体重−助力值，负重=体重+附加重；无体重快照时回退到原始重量。 */
     private fun effectiveWeight(exercise: Exercise, recordedWeight: Float, bodyWeightKg: Float): Float =
@@ -401,9 +411,34 @@ class WorkoutViewModel(
         private val workoutRepository: WorkoutRepository,
         private val exerciseRepository: ExerciseRepository,
     ) : ViewModelProvider.Factory {
+
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return WorkoutViewModel(planId, workoutRepository, exerciseRepository) as T
         }
     }
+}
+
+/**
+ * 勾选完成/取消勾选/修改次数重量后重算「最佳」。
+ * - 基准取历史最佳 historyBest（本场训练不变），再与当前已完成的组对比，
+ *   打破纪录才更新 bestSet 并打星；取消勾选纪录组后自动还原历史最佳。
+ * - 必须把最新的 sets 一并写回 state（否则勾选/输入/删组的修改全部丢失）。
+ */
+internal fun recomputeBest(state: ExerciseWorkoutState, sets: List<ActualSet>): ExerciseWorkoutState {
+    var best = state.historyBest
+    var isNewRecord = false
+    sets.filter { it.completed }.forEach { s ->
+        val w = s.weight
+        val r = s.reps
+        if (w <= 0f) return@forEach
+        if (best == null) {
+            best = BestSet(w, r)
+            isNewRecord = true
+        } else if (w > best.weight || (w == best.weight && r > best.reps)) {
+            best = BestSet(w, r)
+            isNewRecord = true
+        }
+    }
+    return state.copy(actualSets = sets, bestSet = best, isNewRecord = isNewRecord)
 }

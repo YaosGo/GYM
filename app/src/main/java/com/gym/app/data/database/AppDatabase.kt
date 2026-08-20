@@ -23,7 +23,7 @@ import com.gym.app.data.entity.WorkoutSession
         WorkoutSession::class,
         ExerciseRecord::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -75,6 +75,15 @@ abstract class AppDatabase : RoomDatabase() {
                 names.joinToString(prefix = "(", postfix = ")") { "'$it'" }
         }
 
+        /** v6 → v7：workout_plan_exercises 新增 target_weight 列（计划目标重量）。 */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE workout_plan_exercises ADD COLUMN target_weight REAL NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -85,7 +94,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME,
                 )
-                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { instance = it }

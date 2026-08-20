@@ -434,8 +434,7 @@ private fun formatWeightKg(w: Float): String =
 
 private fun formatTons(t: Float): String {
     val v = t.toDouble()
-    return if (v < 1000) (if (v == v.toInt().toDouble()) "${v.toInt()}" else java.text.DecimalFormat("#.#").format(v))
-    else "${java.text.DecimalFormat("#.#").format(v / 1000)}k"
+    return if (v == v.toInt().toDouble()) "${v.toInt()}" else java.text.DecimalFormat("#.#").format(v)
 }
 
 private fun parseIntArray(json: String): List<Int> {

@@ -46,6 +46,8 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -226,6 +228,7 @@ fun CreatePlanScreen(
                             index = index,
                             onSetsChanged = { viewModel.updateExerciseSets(selected.exercise.id, it) },
                             onRepsChanged = { viewModel.updateExerciseReps(selected.exercise.id, it) },
+                            onWeightChanged = { viewModel.updateExerciseWeight(selected.exercise.id, it) },
                             onWeightModeChanged = { viewModel.updateExerciseWeightMode(selected.exercise.id, it) },
                             onRemove = { viewModel.removeExercise(selected.exercise.id) },
                             onMoveUp = {
@@ -366,17 +369,24 @@ fun CreatePlanScreen(
     }
 }
 
+/** 创建计划页编辑弹窗的目标字段 */
+private enum class CreateEditField { Sets, Reps, Weight }
+
 @Composable
 private fun SelectedExerciseCard(
     selected: SelectedExercise,
     index: Int,
     onSetsChanged: (Int) -> Unit,
     onRepsChanged: (Int) -> Unit,
+    onWeightChanged: (Float) -> Unit = {},
     onWeightModeChanged: (Int) -> Unit,
     onRemove: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
 ) {
+    // 点击数字弹窗编辑（替代 +/− 步进器）
+    var editField by remember { mutableStateOf<CreateEditField?>(null) }
+    var editText by remember { mutableStateOf("") }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -424,18 +434,31 @@ private fun SelectedExerciseCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    NumberInput(
-                        value = selected.targetSets,
-                        onValueChanged = onSetsChanged,
-                        label = "组",
-                        modifier = Modifier.width(64.dp),
+                    EditableNumber(
+                        text = "${selected.targetSets} 组",
+                        onClick = {
+                            editField = CreateEditField.Sets
+                            editText = "${selected.targetSets}"
+                        },
                     )
                     Text(" × ", style = MaterialTheme.typography.bodySmall)
-                    NumberInput(
-                        value = selected.targetReps,
-                        onValueChanged = onRepsChanged,
-                        label = "次",
-                        modifier = Modifier.width(64.dp),
+                    EditableNumber(
+                        text = "${selected.targetReps} 次",
+                        onClick = {
+                            editField = CreateEditField.Reps
+                            editText = "${selected.targetReps}"
+                        },
+                    )
+                    Text(" × ", style = MaterialTheme.typography.bodySmall)
+                    EditableNumber(
+                        text = if (selected.targetWeight > 0f)
+                            "${formatWeightKg(selected.targetWeight)} kg"
+                        else "— kg",
+                        onClick = {
+                            editField = CreateEditField.Weight
+                            editText = if (selected.targetWeight > 0f)
+                                formatWeightKg(selected.targetWeight) else ""
+                        },
                     )
                 }
                 // 重量记录方式三态切换（普通/助力/负重）
@@ -460,41 +483,85 @@ private fun SelectedExerciseCard(
             }
         }
     }
+
+    // 组数/次数/目标重量编辑弹窗
+    if (editField != null) {
+        AlertDialog(
+            onDismissRequest = { editField = null },
+            title = {
+                Text(
+                    when (editField) {
+                        CreateEditField.Sets -> "目标组数"
+                        CreateEditField.Reps -> "目标次数"
+                        CreateEditField.Weight -> "目标重量"
+                        null -> ""
+                    },
+                    fontWeight = FontWeight.Bold,
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        when (editField) {
+                            CreateEditField.Sets, CreateEditField.Reps -> "范围 1–99"
+                            CreateEditField.Weight -> "单位 kg，0 表示不设定"
+                            null -> ""
+                        },
+                        fontSize = 12.sp,
+                        color = MediumGray,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editText,
+                        onValueChange = { input ->
+                            editText = if (editField == CreateEditField.Weight) input.filter { it.isDigit() || it == '.' }
+                            else input.filter { it.isDigit() }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = if (editField == CreateEditField.Weight) KeyboardType.Decimal else KeyboardType.Number,
+                        ),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    when (editField) {
+                        CreateEditField.Sets -> editText.toIntOrNull()?.let { if (it in 1..99) onSetsChanged(it) }
+                        CreateEditField.Reps -> editText.toIntOrNull()?.let { if (it in 1..99) onRepsChanged(it) }
+                        CreateEditField.Weight -> editText.toFloatOrNull()?.let { if (it in 0f..500f) onWeightChanged(it) }
+                        null -> {}
+                    }
+                    editField = null
+                }) {
+                    Text("确定", color = AccentOrange, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editField = null }) {
+                    Text("取消", color = MediumGray)
+                }
+            },
+        )
+    }
 }
 
 @Composable
-private fun NumberInput(
-    value: Int,
-    onValueChanged: (Int) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "-",
-            modifier = Modifier
-                .clickable { if (value > 1) onValueChanged(value - 1) }
-                .padding(horizontal = 4.dp),
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "$value",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "+",
-            modifier = Modifier
-                .clickable { if (value < 99) onValueChanged(value + 1) }
-                .padding(horizontal = 4.dp),
-            fontWeight = FontWeight.Bold,
-        )
-        Text(text = label, style = MaterialTheme.typography.labelSmall)
-    }
+private fun EditableNumber(text: String, onClick: () -> Unit) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.Bold,
+        color = AccentOrange,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+    )
 }
+
+private fun formatWeightKg(w: Float): String =
+    if (w == w.toInt().toFloat()) w.toInt().toString()
+    else java.text.DecimalFormat("#.#").format(w.toDouble())
 
 @Composable
 private fun SearchResultItem(

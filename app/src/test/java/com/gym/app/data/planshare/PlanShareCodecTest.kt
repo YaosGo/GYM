@@ -118,6 +118,21 @@ class PlanShareCodecTest {
     }
 
     @Test
+    fun `decode accepts legacy compact key share string - user reported failure case`() {
+        // 用户 2026-08-20 实机反馈「无法识别的内容」的分享串（三分化-推），回归用例
+        val legacy = "GYM1:eyJhIjoxLCJiIjoi5LiJ5YiG5YyWLeaOqCIsImMiOlt7ImEiOiIwMDI1IiwiYiI6IuadoOmTg-WNp-aOqCIsImMiOmZhbHNlLCJkIjo0LCJlIjoxMCwiZiI6MH0seyJhIjoiMDMxNCIsImIiOiLlk5Hpk4PkuIrmlpzljafmjqgiLCJjIjpmYWxzZSwiZCI6NCwiZSI6MTUsImYiOjB9LHsiYSI6IjAyNTEiLCJiIjoi5Y-M5p2g6IeC5bGI5Ly4IiwiYyI6ZmFsc2UsImQiOjQsImUiOjE1LCJmIjoxfSx7ImEiOiIwMzg5IiwiYiI6IuWTkemTg-WdkOWnv-WHs-S8uOWxlSIsImMiOmZhbHNlLCJkIjo1LCJlIjoxNSwiZiI6MH0seyJhIjoiMDQwNSIsImIiOiLlk5Hpk4PlnZDlp7_ogqnmjqjkuL4iLCJjIjpmYWxzZSwiZCI6MywiZSI6MTAsImYiOjB9LHsiYSI6IjAxOTIiLCJiIjoi57uz57Si5Y2V6IeC5L6n5bmz5Li-IiwiYyI6ZmFsc2UsImQiOjMsImUiOjE1LCJmIjowfV19"
+        val decoded = PlanShareCodec.decode(legacy)
+
+        assertNotNull(decoded)
+        assertEquals("三分化-推", decoded!!.name)
+        assertEquals(6, decoded.exercises.size)
+        assertEquals("0025", decoded.exercises[0].id)
+        assertEquals("双杠臂屈伸", decoded.exercises[2].name)
+        assertEquals(1, decoded.exercises[2].weightMode)
+        assertEquals("0192", decoded.exercises[5].id)
+    }
+
+    @Test
     fun `decode accepts line breaks inside payload`() {
         // 聊天软件复制长文本时会折行
         val encoded = PlanShareCodec.encode(samplePlan())
@@ -135,5 +150,49 @@ class PlanShareCodecTest {
         val encoded = PlanShareCodec.encode(samplePlan())
         val withInvisible = encoded.replace(PlanShareCodec.PREFIX, PlanShareCodec.PREFIX + "​")
         assertNotNull(PlanShareCodec.decode(withInvisible))
+    }
+
+    @Test
+    fun `decode tolerates leading and trailing junk text`() {
+        val encoded = PlanShareCodec.encode(samplePlan())
+        val withJunk = "这是分享给你的计划，复制这段：$encoded 记得导入哦！"
+        val decoded = PlanShareCodec.decode(withJunk)
+
+        assertNotNull(decoded)
+        assertEquals("练腿日", decoded!!.name)
+        assertEquals(3, decoded.exercises.size)
+    }
+
+    @Test
+    fun `decode tolerates non breaking spaces from chat copy`() {
+        val encoded = PlanShareCodec.encode(samplePlan())
+        // NBSP (U+00A0) 不是 Java isWhitespace，聊天软件可能把它塞进长文本
+        val withNbsp = encoded.replace(PlanShareCodec.PREFIX, PlanShareCodec.PREFIX + " ")
+        assertNotNull(PlanShareCodec.decode(withNbsp))
+    }
+
+    @Test
+    fun `decode tolerates junk without prefix`() {
+        val encoded = PlanShareCodec.encode(samplePlan())
+        val payload = encoded.removePrefix(PlanShareCodec.PREFIX)
+        val withJunk = "复制这段代码 $payload 结尾"
+        val decoded = PlanShareCodec.decode(withJunk)
+
+        assertNotNull(decoded)
+        assertEquals("练腿日", decoded!!.name)
+    }
+
+    @Test
+    fun `extractShareString returns clean string from messy clipboard`() {
+        val encoded = PlanShareCodec.encode(samplePlan())
+        val clipboard = "猫教练计划分享\n$encoded\n长按复制整段文字"
+
+        assertEquals(encoded, PlanShareCodec.extractShareString(clipboard))
+    }
+
+    @Test
+    fun `extractShareString returns null for unrelated text`() {
+        assertEquals(null, PlanShareCodec.extractShareString("今天练背，记得带毛巾"))
+        assertEquals(null, PlanShareCodec.extractShareString(""))
     }
 }
